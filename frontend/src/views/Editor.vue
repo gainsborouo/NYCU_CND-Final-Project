@@ -269,7 +269,7 @@ export default {
 };
 </script>
 
-<style>
+<style scoped>
 textarea::-webkit-scrollbar {
   width: 8px;
 }
@@ -277,64 +277,5 @@ textarea::-webkit-scrollbar {
 textarea::-webkit-scrollbar-thumb {
   background-color: #4b5563;
   border-radius: 6px;
-}
-
-.prose pre {
-  overflow-x: auto;
-  padding: 0.75rem;
-  border-radius: 0.375rem;
-  background-color: #1e1e1e;
-  color: #f3f3f3;
-}
-
-.prose code {
-  background-color: #1e1e1e;
-  padding: 0.2em 0.4em;
-  border-radius: 0.25rem;
-  font-size: 0.95em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.prose code::before,
-.prose code::after {
-  content: none;
-}
-
-.prose img {
-  margin-top: 1.5em;
-  margin-bottom: 1.5em;
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-.prose table {
-  margin-top: 1.5em;
-  margin-bottom: 1.5em;
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.prose th,
-.prose td {
-  padding: 0.75rem;
-  border: 1px solid #4a5568;
-}
-
-.prose > * {
-  line-height: 1.6;
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-  position: relative;
-}
-
-.prose {
-  scroll-behavior: smooth;
-  overflow-y: auto;
-}
-
-.prose [data-line] {
-  position: relative;
-  min-height: 1.6em;
 }
 </style>

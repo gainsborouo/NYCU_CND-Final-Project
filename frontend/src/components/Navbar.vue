@@ -4,26 +4,44 @@
       <router-link to="/" class="text-2xl font-bold text-gray-200 w-60">
         Document Center
       </router-link>
-      
+
       <div class="flex-1 flex justify-center space-x-8">
-        <router-link 
-          to="/" 
+        <router-link
+          to="/"
           class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
         >
           Home
         </router-link>
-        <router-link 
-          to="/editor" 
+        <router-link
+          to="/editor"
           class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
         >
           Editor
+        </router-link>
+        <router-link
+          to="/viewer"
+          class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
+        >
+          Viewer
+        </router-link>
+        <router-link
+          to="/notifications"
+          class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
+        >
+          Notifications
+        </router-link>
+        <router-link
+          to="/review"
+          class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
+        >
+          Review
         </router-link>
       </div>
 
       <div class="flex items-center w-60 justify-end">
         <div v-if="!isLoggedIn" class="flex space-x-4">
-          <router-link 
-            to="/login" 
+          <router-link
+            to="/login"
             class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
           >
             Login
@@ -31,10 +49,9 @@
         </div>
         <div v-else class="flex items-center space-x-4">
           <span class="text-gray-200">{{ username }}</span>
-          <button 
+          <button
             @click="logout"
-            class="border border-cyan-700 text-cyan-700 px-3 py-1 rounded 
-                   hover:bg-cyan-700 hover:text-black transition-all duration-300"
+            class="border border-cyan-700 text-cyan-700 px-3 py-1 rounded hover:bg-cyan-700 hover:text-black transition-all duration-300"
           >
             Logout
           </button>
@@ -46,18 +63,18 @@
 
 <script>
 export default {
-  name: 'Navbar',
+  name: "Navbar",
   data() {
     return {
       isLoggedIn: false,
-      username: ''
-    }
+      username: "",
+    };
   },
   methods: {
     logout() {
-      this.isLoggedIn = false
-      this.username = ''
-    }
-  }
-}
+      this.isLoggedIn = false;
+      this.username = "";
+    },
+  },
+};
 </script>
