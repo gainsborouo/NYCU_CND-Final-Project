@@ -1,0 +1,9 @@
+curl -X POST "http://localhost:8000/admin/groups/" ^
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMSIsInVzZXJuYW1lIjoiYWRtaW4iLCJnbG9iYWxfcm9sZSI6ImFkbWluIiwiZXhwIjoxNzQ4NTk1MDc4fQ.9Sf3GQxuH5gG2wBRYsVB7T434b6btg6fYtjPukdKqm8" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"group_id\": \"gid1\", \"group_name\": \"Group 1\"}"
+
+curl -X POST "http://localhost:8000/admin/groups/assign-roles" ^
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMSIsInVzZXJuYW1lIjoiYWRtaW4iLCJnbG9iYWxfcm9sZSI6ImFkbWluIiwiZXhwIjoxNzQ4NTk1MDc4fQ.9Sf3GQxuH5gG2wBRYsVB7T434b6btg6fYtjPukdKqm8" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"username\": \"admin\", \"group_name\": \"Group 1\", \"roles\": [\"admin\", \"user\"]}"

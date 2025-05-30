@@ -1,5 +1,5 @@
-from sqlmodel import Field, SQLModel
-from typing import Optional, List
+from sqlmodel import Field, SQLModel, Relationship
+from typing import Optional, List, Dict
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -19,6 +19,10 @@ class NotificationType(str, Enum):
     DOCUMENT_APPROVED = "document_approved"
     DOCUMENT_REJECTED = "document_rejection" # Corrected to be consistent
     DOCUMENT_STATE_CHANGE = "document_state_change" # For creator when review initiated, or admin changes things
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
 
 # --- Models ---
 class DocumentBase(SQLModel):
@@ -87,3 +91,53 @@ class Notification(NotificationBase, table=True):
 class NotificationRead(NotificationBase):
     id: int
     created_at: datetime
+
+class UserBase(SQLModel):
+    uid: str = Field(primary_key=True)  # OAuth-derived user ID
+    username: str
+    password: Optional[str] = None  # For admin accounts, None for OAuth accounts
+    global_role: UserRole = UserRole.USER
+
+class User(UserBase, table=True):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column_kwargs={"onupdate": datetime.now(timezone.utc)})
+    groups: List["UserGroupRole"] = Relationship(back_populates="user")  # Relationship to UserGroupRole
+
+class UserCreate(SQLModel):
+    uid: str
+    username: str
+    password: Optional[str] = None
+    global_role: Optional[UserRole] = UserRole.USER
+
+class UserRead(UserBase):
+    created_at: datetime
+    updated_at: datetime
+
+class GroupBase(SQLModel):
+    group_id: str = Field(primary_key=True)
+    group_name: str
+
+class Group(GroupBase, table=True):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column_kwargs={"onupdate": datetime.now(timezone.utc)})
+    users: List["UserGroupRole"] = Relationship(back_populates="group")  # Relationship to UserGroupRole
+
+class GroupCreate(SQLModel):
+    group_id: str
+    group_name: str
+
+class GroupRead(GroupBase):
+    created_at: datetime
+    updated_at: datetime
+
+class UserGroupRole(SQLModel, table=True):
+    user_uid: str = Field(foreign_key="user.uid", primary_key=True)
+    group_id: str = Field(foreign_key="group.group_id", primary_key=True)
+    role: UserRole = Field(primary_key=True)
+    user: User = Relationship(back_populates="groups")
+    group: Group = Relationship(back_populates="users")
+
+class GroupRoleAssignment(SQLModel):
+    username: str
+    group_name: str
+    roles: List[UserRole]
