@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "../views/Home.vue";
 import Login from "../views/Login.vue";
-import MarkdownEditor from "../views/MarkdownEditor.vue";
+import MarkdownEditor from "../views/Editor.vue";
 
 const routes = [
   {
@@ -15,7 +15,7 @@ const routes = [
     component: Login,
   },
   {
-    path: "/document",
+    path: "/editor",
     name: "MarkdownEditor",
     component: MarkdownEditor,
   },

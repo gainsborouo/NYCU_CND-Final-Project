@@ -1,22 +1,24 @@
 <template>
-  <div class="flex h-screen bg-gray-900 text-gray-100 font-sans">
+  <div class="flex h-[calc(100vh-3.5rem)] bg-gray-900 text-gray-100 font-sans">
     <!-- Markdown Editor -->
     <div
-      class="w-1/2 border-r border-gray-700 p-6 overflow-auto bg-gray-800"
+      class="w-1/2 border-r border-gray-700 flex bg-gray-800"
       @drop.prevent="handleDrop"
       @dragover.prevent
     >
-      <textarea
-        v-model="markdown"
-        ref="textareaRef"
-        @click="updateCursor"
-        @keyup="updateCursor"
-        @scroll="handleScroll"
-        @input="updateCursor"
-        @mouseup="updateCursor"
-        class="w-full h-full p-4 font-mono text-sm border border-gray-700 rounded-lg resize-none focus:outline-none bg-gray-900 text-gray-100"
-        placeholder="Write your markdown here..."
-      ></textarea>
+      <div class="flex-1 p-6">
+        <textarea
+          v-model="markdown"
+          ref="textareaRef"
+          @click="updateCursor"
+          @keyup="updateCursor"
+          @scroll="handleScroll"
+          @input="updateCursor"
+          @mouseup="updateCursor"
+          class="w-full h-full p-4 font-mono text-sm border border-gray-700 rounded-lg resize-none focus:outline-none bg-gray-900 text-gray-100"
+          placeholder="Write your markdown here..."
+        ></textarea>
+      </div>
     </div>
 
     <!-- Rendered Output -->

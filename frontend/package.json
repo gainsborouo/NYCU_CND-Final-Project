@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/line-clamp": "^0.4.4",
     "@tailwindcss/vite": "^4.0.6",
     "axios": "^1.7.9",
     "dompurify": "^3.2.6",
