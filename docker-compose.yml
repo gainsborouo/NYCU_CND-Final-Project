@@ -22,7 +22,7 @@ services:
 
   minio-api:
     build:
-      context: .
+      context: ./minio
       dockerfile: Dockerfile
     container_name: minio-api
     ports:
