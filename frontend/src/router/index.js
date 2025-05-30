@@ -1,7 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "../views/Home.vue";
 import Login from "../views/Login.vue";
-import MarkdownEditor from "../views/Editor.vue";
+import Editor from "../views/Editor.vue";
+import Viewer from "../views/Viewer.vue";
+import Notifications from "../views/Notifications.vue";
+import Review from "../views/Review.vue";
 
 const routes = [
   {
@@ -15,16 +18,32 @@ const routes = [
     component: Login,
   },
   {
-    path: "/editor",
-    name: "MarkdownEditor",
-    component: MarkdownEditor,
+    path: "/editor/:id?",
+    name: "Editor",
+    component: Editor,
+    // meta: { requiresAuth: true },
+    props: true,
   },
-//   {
-//     path: "/logviewer",
-//     name: "LogViewer",
-//     component: LogViewer,
-//     meta: { requiresAuth: true },
-//   },
+  {
+    path: "/viewer/:id?",
+    name: "Viewer",
+    component: Viewer,
+    // meta: { requiresAuth: true },
+    props: true,
+  },
+  {
+    path: "/notifications",
+    name: "Notifications",
+    component: Notifications,
+    // meta: { requiresAuth: true },
+  },
+  {
+    path: "/review/:id?",
+    name: "Review",
+    component: Review,
+    // meta: { requiresAuth: true },
+    props: true,
+  },
 ];
 
 const router = createRouter({
