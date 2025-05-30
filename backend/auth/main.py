@@ -14,10 +14,11 @@ from passlib.context import CryptContext
 
 # Import all models and enums from models.py
 from models import (
-    UserRole,
+    GlobalRole, GroupRole,
     User, UserCreate, UserRead,
     Group, GroupCreate, GroupRead,
-    UserGroupRole, GroupRoleAssignment
+    UserGroupRole, GroupRoleAssignment,
+    PasswordUpdate
 )
 
 # --- Database Setup ---
@@ -60,7 +61,7 @@ def on_startup():
             admin_create = UserCreate(
                 username="admin",
                 password="admin",  # Hash the admin password
-                global_role=UserRole.ADMIN
+                global_role=GlobalRole.ADMIN
             )
             create_user(admin_create, session)
 
@@ -68,47 +69,28 @@ def on_startup():
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 # --- OAuth Token Validation ---
-async def get_current_user(
-    token: str = Depends(oauth2_scheme)
-) -> dict:
-    try:
-        # Decode JWT with validation
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id: str = payload.get("uid")
-        username: str = payload.get("username")
-        global_role: str = payload.get("global_role")
+# async def is_admin(token: str = Depends(oauth2_scheme)) -> bool:
+#     """Dependency to verify if the current user has the 'admin' role."""
+#     try:
+#         # Decode JWT with validation
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
 
-        if not user_id or not username or not global_role:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload: missing user_id, username, or global_role"
-            )
-        
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during token processing: {str(e)}"
-        )
-
-async def verify_admin_role(user_info: dict = Depends(get_current_user)) -> dict:
-    """Dependency to verify if the current user has the 'admin' role."""
-    if "admin" not in user_info.get("global_role"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operation forbidden: Admin role required."
-        )
-    return user_info
+#         if "admin" not in payload.get("global_role"):
+#             raise HTTPException(
+#                 status_code=status.HTTP_403_FORBIDDEN,
+#                 detail="Operation forbidden: Admin role required."
+#             )
+#         return user_info
+#     except jwt.ExpiredSignatureError:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Token has expired"
+#         )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Unexpected error during token processing: {str(e)}"
+#         )
 
 # --- Google OAuth2 Endpoints ---
 @app.get("/oauth/google/login")
@@ -158,12 +140,12 @@ async def auth_google(
             raise HTTPException(status_code=401, detail="Invalid token content")
 
         # Check if user exists
-        user = get_user_by_username(name, session)
+        user = session.exec(select(User).where(User.username == name)).first()
         if not user:
             user_create = UserCreate(
                 username=name,
                 password=None,
-                global_role=UserRole.USER
+                global_role=GlobalRole.USER
             )
             user = create_user(user_create, session)
 
@@ -251,11 +233,11 @@ def create_user(
     session: Session
 ) -> User:
 
-    existing_user = get_user_by_username(user_create.username, session)
+    existing_user = session.exec(select(User).where(User.username == user_create.username)).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"User with UID {user_create.uid} already exists."
+            detail=f"User with UID {user_create.username} already exists."
         )
     
     # Create new user
@@ -273,16 +255,27 @@ def create_user(
     session.refresh(user)
     return user
 
+@app.post("/admin/users/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def user_create(
+    user_create: UserCreate,
+    session: Session = Depends(get_session)
+):
+    """
+    Create a new user (admin only).
 
-def get_user_by_username(
-    username: str,
-    session: Session
-) -> Optional[UserRead]:
-    user = session.exec(select(User).where(User.username == username)).first()
-    if not user:
-        return None
+    Args:
+        user_create: UserCreate model with username, optional password, and optional global_role.
+        admin_user: User info from JWT, verified to have admin role.
+        session: Database session.
+
+    Returns:
+        UserRead: The created user.
+
+    Raises:
+        HTTPException: If the username already exists.
+    """
+    user = create_user(user_create, session)
     return UserRead.from_orm(user)
-
 
 @app.post("/admin/groups/", response_model=GroupRead, status_code=status.HTTP_201_CREATED)
 async def create_group(
@@ -378,7 +371,7 @@ async def assign_group_roles(
         )
     
     # Validate roles
-    valid_roles = {UserRole.USER, UserRole.ADMIN}
+    valid_roles = {GroupRole.USER, GroupRole.REVIEWER, GroupRole.ADMIN}
     invalid_roles = set(assignment.roles) - valid_roles
     if invalid_roles:
         raise HTTPException(
@@ -431,7 +424,7 @@ async def remove_group_roles(
         )
     
     # Validate roles
-    valid_roles = {UserRole.USER, UserRole.ADMIN}
+    valid_roles = {GroupRole.USER, GroupRole.REVIEWER, GroupRole.ADMIN}
     invalid_roles = set(assignment.roles) - valid_roles
     if invalid_roles:
         raise HTTPException(
@@ -491,6 +484,34 @@ async def get_all_user_group_roles(
     """
     user_group_roles = session.exec(select(UserGroupRole)).all()
     return user_group_roles
+
+@app.post("/admin/password", status_code=status.HTTP_204_NO_CONTENT)
+async def update_password(
+    password_update: PasswordUpdate,
+    session: Session = Depends(get_session)
+):
+    """
+    Update a user's password by username (admin only).
+
+    Args:
+        password_update: PasswordUpdate model with username and new_password.
+        admin_user: Admin user info from JWT, verified to have admin role.
+        session: Database session.
+
+    Raises:
+        HTTPException: If the user is not found.
+    """
+    user = session.exec(select(User).where(User.username == password_update.username)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with username {password_update.username} not found."
+        )
+    
+    # Hash the new password
+    user.password = hash_password(password_update.new_password)
+    session.add(user)
+    session.commit()
 
 @app.get("/me")
 async def get_current_user(
