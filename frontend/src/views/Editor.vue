@@ -269,7 +269,8 @@ export default {
 };
 </script>
 
-<style scoped>
+
+<style>
 textarea::-webkit-scrollbar {
   width: 8px;
 }
