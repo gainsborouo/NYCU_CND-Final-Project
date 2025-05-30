@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field as PydanticField, computed_field # Use ali
 
 
 # Placeholder for external S3 URL generation
-from minio import get_s3_url_from_id
+from minio import get_read_s3_url,get_upload_s3_url
 # def get_s3_url_from_id(document_id: int) -> str:
 #     """
 #     Placeholder for a function that generates a document URL (e.g., S3 pre-signed URL).
@@ -76,7 +76,19 @@ class DocumentRead(DocumentBase):
     def url(self) -> str:
         if self.id is None:
             return "" # Or raise an error if id is expected to always be present
-        return get_s3_url_from_id(self.id)
+        return get_read_s3_url(self.id,'main.md')
+    
+class DocumentWrite(DocumentBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        if self.id is None:
+            return "" # Or raise an error if id is expected to always be present
+        return get_upload_s3_url(self.id,'main.md')
 
 # --- Review Models ---
 class ReviewRecordBase(SQLModel):
