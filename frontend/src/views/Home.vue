@@ -74,8 +74,8 @@
               </div>
             </div>
 
-            <div class="px-6 py-4 border-t border-gray-700 bg-gray-800/50">
-              <div class="flex justify-end gap-3">
+            <div class="p-4 border-t border-gray-700 bg-gray-800/50 min-h-[4rem] flex items-center">
+              <div class="flex justify-end gap-3 w-full">
                 <!-- Draft actions -->
                 <template v-if="doc.status === 'Draft'">
                   <button
