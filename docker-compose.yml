@@ -37,6 +37,47 @@ services:
     networks:
       - app_network
 
+  flow:
+    build: ./backend/flow
+    depends_on:
+      pg:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    env_file:
+      - ./backend/flow/.env
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - .venv/
+        - action: rebuild
+          path: ./uv.lock
+    networks:
+      - app_network
+  pg:
+    image: postgres:latest
+
+    environment:
+      POSTGRES_USER: admin
+      PGUSER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: database
+
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "admin","-d", "database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # volumes:
+    #   - pg_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
 networks:
   app_network:
     driver: bridge
