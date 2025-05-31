@@ -34,6 +34,16 @@ import os
 SECRET_KEY = os.getenv("SECRET_KEY", "your-very-secret-jwt-signing-key")  # SHOULD BE FROM ENV VAR
 ALGORITHM = os.getenv("ALGORITHM", "HS256")  # Or RS256, ES256 if using asymmetric keys
 
+import jwt # pip install python-jose[cryptography] or pyjwt
+from jwt import PyJWTError
+import os
+# --- Configuration (IMPORTANT: Replace with environment variables in production) ---
+# This is a dummy secret key for DEMONSTRATION.
+# In production, this would be a real secret from your auth microservice,
+# or better yet, a public key/certificate for JWT signature verification.
+SECRET_KEY = os.getenv("SECRET_KEY", "your-very-secret-jwt-signing-key")  # SHOULD BE FROM ENV VAR
+ALGORITHM = os.getenv("ALGORITHM", "HS256")  # Or RS256, ES256 if using asymmetric keys
+
 # --- Database Setup ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./database.db")
 engine = create_engine(DATABASE_URL, echo=True)
