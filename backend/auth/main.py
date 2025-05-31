@@ -26,8 +26,8 @@ load_dotenv()
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
-# FRONTEND_URL = os.getenv("FRONTEND_URL")
-# FRONTEND_REDIRECT_PATH = os.getenv("FRONTEND_REDIRECT_PATH")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONTEND_REDIRECT_PATH = os.getenv("FRONTEND_REDIRECT_PATH")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 DATABASE_URL = os.getenv("DATABASE_URL","sqlite:///./auth_microservice.db")
@@ -171,12 +171,12 @@ async def auth_google(
             "exp": expiration
         }, SECRET_KEY, algorithm=ALGORITHM)
 
-        return {
-            "access_token": our_jwt_token,
-            "token_type": "bearer"
-        }
-        # front_end_redirect_url = f"{FRONTEND_URL}{FRONTEND_REDIRECT_PATH}?token={our_jwt_token}"
-        # return RedirectResponse(url=front_end_redirect_url)
+        # return {
+        #     "access_token": our_jwt_token,
+        #     "token_type": "bearer"
+        # }
+        front_end_redirect_url = f"{FRONTEND_URL}{FRONTEND_REDIRECT_PATH}?token={our_jwt_token}"
+        return RedirectResponse(url=front_end_redirect_url)
 
     except ValueError as e:
         print("Token verification failed:", str(e))
@@ -225,8 +225,8 @@ async def login(
         "access_token": our_jwt_token,
         "token_type": "bearer"
     }
-        # front_end_redirect_url = f"{FRONTEND_URL}{FRONTEND_REDIRECT_PATH}?token={our_jwt_token}"
-        # return RedirectResponse(url=front_end_redirect_url)
+    # front_end_redirect_url = f"{FRONTEND_URL}{FRONTEND_REDIRECT_PATH}?token={our_jwt_token}"
+    # return RedirectResponse(url=front_end_redirect_url)
 
 def create_user(
     user_create: UserCreate,

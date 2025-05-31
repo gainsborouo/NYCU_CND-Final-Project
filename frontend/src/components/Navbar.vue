@@ -62,19 +62,31 @@
 </template>
 
 <script>
+import { computed } from "vue";
+import { useRouter } from "vue-router";
+import { authStore } from "../store/auth";
+
 export default {
   name: "Navbar",
-  data() {
-    return {
-      isLoggedIn: false,
-      username: "",
+  setup() {
+    const router = useRouter();
+    const isLoggedIn = computed(() => !!authStore.token);
+    const username = computed(() => {
+      if (!authStore.token) return "";
+      try {
+        const payload = JSON.parse(atob(authStore.token.split(".")[1]));
+        return payload.username;
+      } catch (error) {
+        return "";
+      }
+    });
+
+    const logout = () => {
+      authStore.setToken(null);
+      router.push({ name: "Home" });
     };
-  },
-  methods: {
-    logout() {
-      this.isLoggedIn = false;
-      this.username = "";
-    },
+
+    return { isLoggedIn, username, logout };
   },
 };
 </script>
