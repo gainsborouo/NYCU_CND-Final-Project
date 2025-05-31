@@ -1,8 +1,8 @@
 <template>
   <div class="min-h-[calc(100vh-3.5rem)] bg-gray-950 text-gray-100">
-    <div class="grid grid-cols-2 h-[calc(100vh-3.5rem)]"> <!-- 修改這裡 -->
+    <div class="grid grid-cols-2 h-[calc(100vh-3.5rem)]">
       <!-- Document Preview -->
-      <div class="border-r border-gray-700 p-6 overflow-y-auto h-full"> <!-- 修改這裡 -->
+      <div class="border-r border-gray-700 p-6 overflow-y-auto h-full">
         <div class="max-w-2xl mx-auto">
           <h1 class="text-2xl font-bold mb-6">{{ document.title }}</h1>
           <div class="prose prose-invert max-w-none">
@@ -12,7 +12,7 @@
       </div>
 
       <!-- Review Panel -->
-      <div class="p-6 bg-gray-900 overflow-y-auto h-full"> <!-- 修改這裡 -->
+      <div class="p-6 bg-gray-900 overflow-y-auto h-full">
         <div class="max-w-2xl mx-auto">
           <h2 class="text-xl font-bold mb-6">Review</h2>
 

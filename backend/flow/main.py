@@ -1,30 +1,51 @@
-import os
-import httpx
-from jose import jwt
-from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, status, Header
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse
-from sqlmodel import Session, create_engine, select, SQLModel
-from typing import List, Optional, Annotated, Dict
-from datetime import datetime, timezone, timedelta
-from google.oauth2 import id_token
-from google.auth.transport import requests as grequests
-from passlib.context import CryptContext
-
-# Import all models and enums from models.py
+from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # Import for JWT handling
+from sqlmodel import Session, SQLModel, create_engine, select
+from typing import Dict, List, Optional
+from sqlalchemy import or_ # Needed for combining multiple OR conditions in WHERE clauses
+from datetime import datetime,timezone
+# Import all necessary models from your models.py file
 from models import (
-    Document, DocumentRead, DocumentCreate, DocumentUpdate,
-    ReviewRecord, ReviewRecordRead, ReviewRequest, ReviewActionRequest,
-    Notification, NotificationRead, NotificationType,
-    DocumentStatus, ReviewAction, UserRole,
-    User, UserCreate, UserRead,
-    Group, GroupCreate, GroupRead,
-    UserGroupRole, GroupRoleAssignment
+    Document,
+    DocumentCreate,
+    DocumentRead,
+    UserRoles,
+    DocumentStatus,
+    DocumentUpdate, # Assuming you have a DocumentUpdate model for PATCH requests
+    ReviewActionResult,
+    ReviewRecord,
+    ReviewRecordRead,
+    ReviewAction,
+    ReviewActionRequest,
+    NotificationRead,
+    NotificationType,
+    Notification,
+    NotificationMarkReadRequest,
+    DocumentWrite
 )
+from minio import get_upload_s3_url, get_read_s3_url
+import jwt # pip install python-jose[cryptography] or pyjwt
+from jwt import PyJWTError
+import os
+# --- Configuration (IMPORTANT: Replace with environment variables in production) ---
+# This is a dummy secret key for DEMONSTRATION.
+# In production, this would be a real secret from your auth microservice,
+# or better yet, a public key/certificate for JWT signature verification.
+SECRET_KEY = os.getenv("SECRET_KEY", "your-very-secret-jwt-signing-key")  # SHOULD BE FROM ENV VAR
+ALGORITHM = os.getenv("ALGORITHM", "HS256")  # Or RS256, ES256 if using asymmetric keys
+
+import jwt # pip install python-jose[cryptography] or pyjwt
+from jwt import PyJWTError
+import os
+# --- Configuration (IMPORTANT: Replace with environment variables in production) ---
+# This is a dummy secret key for DEMONSTRATION.
+# In production, this would be a real secret from your auth microservice,
+# or better yet, a public key/certificate for JWT signature verification.
+SECRET_KEY = os.getenv("SECRET_KEY", "your-very-secret-jwt-signing-key")  # SHOULD BE FROM ENV VAR
+ALGORITHM = os.getenv("ALGORITHM", "HS256")  # Or RS256, ES256 if using asymmetric keys
 
 # --- Database Setup ---
-DATABASE_URL = "sqlite:///./review_microservice.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./database.db")
 engine = create_engine(DATABASE_URL, echo=True)
 
 def create_db_and_tables():
@@ -34,993 +55,700 @@ def get_session():
     with Session(engine) as session:
         yield session
 
-# --- Password Hashing Setup ---
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# --- JWT Security Scheme ---
+# This tells FastAPI to expect an "Authorization: Bearer <token>" header
+oauth2_scheme = HTTPBearer()
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+# --- Dependency to get User Context from JWT ---
+async def get_current_user_context(
+    token: HTTPAuthorizationCredentials = Depends(oauth2_scheme) # Get token from header
+) -> UserRoles:
+    """
+    Extracts user_id and UserRoles from the JWT token.
+    Validates the token (conceptually, in this example).
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # --- CRITICAL SECURITY NOTE ---
+        # In a real microservices setup, you would typically use an asymmetric algorithm (e.g., RS256)
+        # and verify the token's signature using the PUBLIC KEY of the authentication microservice.
+        # DO NOT use verify_signature=False in production. This is for demonstration ONLY.
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_signature": False})
+        # For production:
+        # payload = jwt.decode(token.credentials, PUBLIC_KEY_FROM_AUTH_SERVICE, algorithms=[ALGORITHM], audience="your-api-audience")
 
-# --- FastAPI App ---
-app = FastAPI(title="Document Review Microservice")
+        user_id: int = payload.get("uid") # 'sub' is standard for subject (user ID)
+        if user_id is None:
+            raise credentials_exception
 
+        # Assume roles are passed as a 'realm_roles' claim in the JWT
+        realm_roles_data: Dict[str, List[str]] = payload.get("realm_roles", {})
+        if not isinstance(realm_roles_data, dict):
+             # Handle cases where roles might be malformed
+            print(f"Warning: realm_roles claim is not a dictionary: {realm_roles_data}")
+            realm_roles_data = {} # Default to empty roles if malformed
+
+
+        user_roles = UserRoles(user_id=user_id, realm_roles=realm_roles_data)
+        return user_roles
+
+    except PyJWTError:
+        raise credentials_exception
+    except Exception as e:
+        # Catch any other unexpected errors during token processing
+        print(f"Error processing token: {e}")
+        raise credentials_exception
+
+from sqlmodel import Session
+from typing import Optional
+from models import Notification, NotificationType # Assuming these are imported from models.py
+
+def create_notification(
+    session: Session,
+    recipient_id: int,
+    type: NotificationType,
+    message: str,
+    realm_id: str,
+    sender_id: Optional[int] = None,
+    document_id: Optional[int] = None,
+    is_read: bool = False,
+) -> Notification:
+    """
+    Creates and stores a new notification in the database.
+
+    Args:
+        session: The database session.
+        recipient_id: The ID of the user who will receive the notification.
+        type: The type of notification (e.g., DOCUMENT_FOR_REVIEW, DOCUMENT_APPROVED).
+        message: The content of the notification message.
+        realm_id: The realm ID associated with this notification.
+        sender_id: (Optional) The ID of the user who initiated the notification.
+        document_id: (Optional) The ID of the document related to the notification.
+        is_read: (Optional) Initial read status of the notification. Defaults to False.
+
+    Returns:
+        The newly created Notification object.
+    """
+    new_notification = Notification(
+        sender_id=sender_id,
+        recipient_id=recipient_id,
+        document_id=document_id,
+        type=type,
+        message=message,
+        is_read=is_read,
+        realm_id=realm_id
+    )
+
+    session.add(new_notification)
+    session.commit()
+    session.refresh(new_notification)
+
+    return new_notification
+# Initialize the FastAPI app
+app = FastAPI()
+
+# Event handler to create tables on startup
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
-    with Session(engine) as session:
-        admin_user = session.get(User, "1")
-        if not admin_user:
-            admin_create = UserCreate(
-                uid="1",
-                username="admin",
-                password="admin",  # Hash the admin password
-                global_role=UserRole.ADMIN
-            )
-            create_user(admin_create, session)
 
-# --- OAuth2 Configuration ---
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+# --- Create Document Endpoint (same as before, now using JWT context) ---
+@app.post("/documents/{realm_id}", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
+def create_document(
+    realm_id: str,
+    document_create: DocumentCreate,
+    session: Session = Depends(get_session),
+    user_context: UserRoles = Depends(get_current_user_context) # This dependency now gets user info from JWT
+):
+    """
+    Creates a new document under the specified realm.
 
-# Replace these with your own values from the Google Developer Console
-load_dotenv()
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
-# FRONTEND_URL = os.getenv("FRONTEND_URL")
-# FRONTEND_REDIRECT_PATH = os.getenv("FRONTEND_REDIRECT_PATH")
-SECRET_KEY = os.getenv("SECRET_KEY")
-
-# --- OAuth Token Validation ---
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    session: Session = Depends(get_session)
-) -> dict:
-    try:
-        # Decode JWT with validation
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id: str = payload.get("user_id")
-        username: str = payload.get("username")
-        global_role: str = payload.get("global_role")
-
-        if not user_id or not username or not global_role:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload: missing user_id, username, or global_role"
-            )
-
-        # Fetch user from database
-        user = session.get(User, user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found in database"
-            )
-
-        # Fetch group roles from UserGroupRole
-        group_roles = session.exec(
-            select(UserGroupRole).where(UserGroupRole.user_uid == user_id)
-        ).all()
-
-        # Construct ACL dictionary
-        acl = {}
-        for group_role in group_roles:
-            group_id = group_role.group_id
-            role = group_role.role
-            if group_id not in acl:
-                acl[group_id] = {"role": []}
-            acl[group_id]["role"].append(role)
-
-        # Return user info in the specified format
-        return {
-            "ACL": acl,
-            "global_role": global_role,
-            "username": username,
-            "uid": user_id
-        }
-
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during token processing: {str(e)}"
-        )
-
-async def verify_admin_role(user_info: dict = Depends(get_current_user)) -> dict:
-    """Dependency to verify if the current user has the 'admin' role."""
-    if "admin" not in user_info.get("global_role"):
+    - **realm_id**: The ID of the realm where the document will be created.
+    - **document_create**: The document's `title` and `description`.
+    - **Authorization**: The authenticated user must have a 'user' or 'admin' role within the specified realm.
+    """
+    if not (user_context.has_role_in_realm(realm_id, "user") or
+            user_context.has_role_in_realm(realm_id, "admin")):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operation forbidden: Admin role required."
-        )
-    return user_info
-
-# --- Google OAuth2 Endpoints ---
-@app.get("/login/google")
-async def login_google():
-    auth_url = f"https://accounts.google.com/o/oauth2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline"
-    # return {
-    #     "url": auth_url
-    # }
-    return RedirectResponse(url=auth_url)
-
-@app.get("/auth/google")
-async def auth_google(
-    code: str,
-    session: Session = Depends(get_session)
-):
-    token_url = "https://oauth2.googleapis.com/token"
-    data = {
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "grant_type": "authorization_code",
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(token_url, data=data)
-        response.raise_for_status()
-        token_data = response.json()
-
-        id_token_value = token_data.get("id_token")
-        if not id_token_value:
-            raise HTTPException(status_code=400, detail="No ID token received")
-
-    try:
-        payload = id_token.verify_oauth2_token(
-            id_token_value,
-            grequests.Request(),
-            GOOGLE_CLIENT_ID
+            detail=f"User not authorized to create documents in realm '{realm_id}'."
         )
 
-        user_id = payload.get("sub")
-        email = payload.get("email")
-        name = payload.get("name") or email.split("@")[0]
-
-        if not user_id or not email:
-            raise HTTPException(status_code=401, detail="Invalid token content")
-
-        # Check if user exists
-        user = get_user_by_uid(user_id, session)
-        if not user:
-            user_create = UserCreate(
-                uid=user_id,
-                username=name,
-                password=None,
-                global_role=UserRole.USER
-            )
-            user = create_user(user_create, session)
-
-        # Issue your own JWT for app authorization
-        expiration = datetime.now(timezone.utc) + timedelta(hours=1)
-        our_payload = {
-            "user_id": user.uid,
-            "username": user.username,
-            "global_role": user.global_role,
-            "exp": expiration
-        }
-
-        our_jwt_token = jwt.encode(our_payload, SECRET_KEY, algorithm="HS256")
-
-        return {
-            "access_token": our_jwt_token,
-            "token_type": "bearer"
-        }
-
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid ID token")
-
-# --- Local Login Endpoint ---
-@app.post("/login")
-async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    session: Session = Depends(get_session)
-):
-    user = session.exec(
-        select(User).where(User.username == form_data.username)
-    ).first()
-    if not user or not user.password or not verify_password(form_data.password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Set token expiration (e.g., 1 hour)
-    expiration = datetime.now(timezone.utc) + timedelta(hours=1)
-    my_payload = {
-        "user_id": user.uid,
-        "username": user.username,
-        "global_role": user.global_role,
-        "exp": expiration
-    }
-    our_jwt_token = jwt.encode(my_payload, SECRET_KEY, algorithm="HS256")
-
-    return {
-        "access_token": our_jwt_token,
-        "token_type": "bearer"
-    }
-
-def create_user(
-    user_create: UserCreate,
-    session: Session
-) -> User:
-
-    existing_user = session.get(User, user_create.uid)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"User with UID {user_create.uid} already exists."
-        )
-    
-    # Create new user
-    hashed_password = None
-    if user_create.password:
-        hashed_password = hash_password(user_create.password)
-    # print(user_create.password,verify_password(user_create.password, hashed_password))
-    user = User(
-        uid=user_create.uid,
-        username=user_create.username,
-        password=hashed_password,
-        global_role=user_create.global_role
+    db_document = Document(
+        **document_create.model_dump(),
+        creator_id=user_context.user_id,
+        realm_id=int(realm_id) # Convert realm_id to int, assuming your DB stores it as int
     )
-    session.add(user)
+    print(db_document)
+    session.add(db_document)
     session.commit()
-    session.refresh(user)
-    return user
+    session.refresh(db_document)
 
+    return db_document
 
-def get_user_by_uid(
-    uid: str,
-    session: Session
-) -> Optional[UserRead]:
-
-    user = session.get(User, uid)
-    if not user:
-        return None
-    return UserRead.from_orm(user)
-
-
-
-# --- External Service Configuration ---
-AUTH_SERVICE_BASE_URL = "http://localhost:8000/auth" # Base URL for auth service
-
-# --- RBAC and External Auth Integration ---
-
-async def get_user_roles_and_groups_from_auth_service(user_id: int) -> dict:
-    """
-    Fetches user roles and groups from the external authentication service
-    with the format: { "gid1": {"role": "admin"}, "gid2": {"role": "user"} }.
-    
-    Returns a dictionary with flattened lists of 'roles' and 'groups' for easier consumption.
-    Example: {"roles": ["admin", "user"], "groups": ["gid1", "gid2"]}
-
-    {
-        "ACL": {
-            "gid1":{
-                "role": ["admin", "user"],
-            },
-            "gid2":{
-                "role": ["user"],
-            },
-        }
-        "username": "user1"
-        "uid": 123
-    }
-
-    """
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{AUTH_SERVICE_BASE_URL}/userinfo?user_id={user_id}")
-            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-            data: Dict[str, Dict[str, str]] = response.json()
-
-            if not isinstance(data, dict):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Invalid top-level response from authentication service: {data}. Expected a dictionary."
-                )
-            
-            # Extract roles and groups from the new format
-            user_roles = set()
-            user_groups = set()
-            
-            for group_id, group_info in data.items():
-                if not isinstance(group_info, dict) or "role" not in group_info:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Invalid group info from authentication service for group {group_id}: {group_info}. Expected a dictionary with 'role'."
-                    )
-                user_groups.add(group_id)
-                user_roles.add(group_info["role"])
-            
-            return {"roles": list(user_roles), "groups": list(user_groups)}
-
-    except httpx.RequestError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not connect to authentication service: {exc.request.url}"
-        )
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=exc.response.status_code,
-            detail=f"Authentication service returned an error: {exc.response.status_code} - {exc.response.text}"
-        )
-
-async def get_current_user_roles_and_groups(
-    user_id: Annotated[int, Header(alias="X-User-Id")]
-) -> dict:
-    """Dependency to get roles and groups for the current user from the auth service."""
-    return await get_user_roles_and_groups_from_auth_service(user_id)
-
-# async def verify_admin_role(
-#     user_id: Annotated[int, Header(alias="X-User-Id")],
-#     user_info: dict = Depends(get_current_user_roles_and_groups)
-# ) -> int:
-#     """Dependency to verify if the current user has the 'admin' role (in any group)."""
-#     if "admin" not in user_info.get("roles", []): # This now checks the flattened list of roles
-#         raise HTTPException(
-#             status_code=status.HTTP_403_FORBIDDEN,
-#             detail="Operation forbidden: Admin role required."
-#         )
-#     return user_id
-
-# --- API Endpoints ---
-
-@app.post("/documents/", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
-async def create_document(
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    session: Session = Depends(get_session)
+@app.get("/documents/{realm_id}", response_model=List[DocumentRead])
+def get_documents_in_realm(
+    realm_id: str,
+    session: Session = Depends(get_session),
+    user_context: UserRoles = Depends(get_current_user_context),
+    status_filter: Optional[DocumentStatus] = Query(None, description="Filter by document status"),
+    creator_id_filter: Optional[int] = Query(None, description="Filter by document creator ID"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of documents to return"),
+    offset: int = Query(0, ge=0, description="Number of documents to skip")
 ):
-    document = Document(creator_id=user_id, last_editor_id=user_id)
-    session.add(document)
-    session.commit()
-    session.refresh(document)
-    return document
+    """
+    Retrieves a list of documents in a specific realm that the current user has visibility to.
 
-@app.get("/documents/", response_model=List[DocumentRead])
-async def get_all_documents(
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    user_info: dict = Depends(get_current_user_roles_and_groups),
-    session: Session = Depends(get_session)
-):
-    if "admin" in user_info.get("roles", []):
-        documents = session.exec(select(Document)).all()
+    - **realm_id**: The ID of the realm.
+    - **status_filter**: Optional filter for document status (e.g., 'published', 'draft').
+    - **creator_id_filter**: Optional filter for documents created by a specific user.
+    - **limit, offset**: For pagination.
+    - **Authorization**: Access is based on user's roles and document status:
+        - `admin` in realm: Sees all documents.
+        - `user` in realm: Sees own documents and published documents.
+        - `reviewer` in realm: Sees documents assigned for review and published documents.
+        - Other authenticated users or no specific role in realm: Only sees published documents.
+    """
+    query = select(Document).where(Document.realm_id == int(realm_id))
+
+    # Determine user's roles in the specific realm
+    is_admin = user_context.has_role_in_realm(realm_id, "admin")
+    is_user = user_context.has_role_in_realm(realm_id, "user")
+    is_reviewer = user_context.has_role_in_realm(realm_id, "reviewer")
+
+    # Build authorization conditions
+    auth_conditions = []
+
+    if is_admin:
+        # Admins can see everything in the realm, no further auth conditions needed
+        pass
     else:
-        user_groups = user_info.get("groups", [])
-        
-        all_documents = session.exec(select(Document)).all()
-        filtered_documents = []
-        for doc in all_documents:
-            if doc.creator_id == user_id:
-                filtered_documents.append(doc)
-            elif doc.status == DocumentStatus.PUBLISHED:
-                if not doc.allowed_groups: # Publicly viewable if no specific groups are set
-                    filtered_documents.append(doc)
-                else:
-                    doc_allowed_groups = {g.strip() for g in doc.allowed_groups.split(",")}
-                    if doc_allowed_groups.intersection(user_groups):
-                        filtered_documents.append(doc)
-        documents = filtered_documents
+        # Non-admins always see published documents
+        auth_conditions.append(Document.status == DocumentStatus.PUBLISHED)
+
+        if is_user:
+            # Users can see their own documents
+            auth_conditions.append(Document.creator_id == user_context.user_id)
+
+        if is_reviewer:
+            # Reviewers can see documents assigned to them for review
+            auth_conditions.append(Document.current_reviewer_id == user_context.user_id)
+
+        # If no specific role in the realm (and not admin), they only see published (already added)
+        # If user has no specific role and there are no published documents, the list will be empty.
+        # No need to raise 403 here unless absolutely no documents are visible.
+
+    # Apply authorization conditions if not admin
+    if auth_conditions and not is_admin:
+        query = query.where(or_(*auth_conditions))
+    elif not auth_conditions and not is_admin:
+        # This case implies no specific role and no condition to see published documents (unlikely with above logic)
+        # Or if the realm_id is not in the user's roles at all and they are not an admin.
+        # If no authorization condition is met, and not an admin, then nothing should be returned.
+        # We can add a fail-safe here, though the `or_` with `Document.status == DocumentStatus.PUBLISHED` handles most.
+        pass # The query will just return published documents if that's the only condition
+
+    # Apply optional query filters
+    if status_filter:
+        query = query.where(Document.status == status_filter)
+    if creator_id_filter:
+        query = query.where(Document.creator_id == creator_id_filter)
+
+    # Apply pagination
+    query = query.offset(offset).limit(limit)
+
+    documents = session.exec(query).all()
+
     return documents
 
-@app.get("/documents/{document_id}", response_model=DocumentRead)
-async def get_document_detail(
-    document_id: int,
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    user_info: dict = Depends(get_current_user_roles_and_groups),
-    session: Session = Depends(get_session)
+
+# Assuming 'app' is your FastAPI application instance
+# Assuming 'get_session' and 'get_current_user_context' dependencies are defined as before
+
+@app.get("/documents/{document_id}/details", response_model=DocumentRead)
+def get_document_detail(
+    document_id: int, # The ID of the document to retrieve
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
 ):
+    """
+    Retrieves the detailed information for a specific document.
+
+    - **document_id**: The ID of the document to fetch.
+    - **Authorization**: Access is based on user's roles and document status:
+        - `admin` in document's realm: Sees the document.
+        - `user` in document's realm: Sees the document if they are the creator, or if it's published.
+        - `reviewer` in document's realm: Sees the document if they are the current reviewer, or if it's published.
+        - Other authenticated users or no specific role in realm: Only sees the document if it's published.
+    """
+    # 1. Fetch the document from the database
     document = session.get(Document, document_id)
+
+    # 2. Handle Document Not Found
     if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
 
-    # Admins and document creators always have access
-    if "admin" in user_info.get("roles", []) or document.creator_id == user_id:
-        return document
-    
-    # Assigned reviewer can see documents assigned to them
-    if document.current_reviewer_id == user_id: # No 'reviewer' role check needed, just direct assignment
-        return document
+    # 3. Authorization Check
+    # Get user's roles for the document's realm
+    realm_id = str(document.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_user_in_realm = user_context.has_role_in_realm(realm_id, "user")
+    is_reviewer_in_realm = user_context.has_role_in_realm(realm_id, "reviewer")
 
-    # Group-based access for published documents
-    if document.status == DocumentStatus.PUBLISHED:
-        # If allowed_groups is not set or empty, assume it's public for published documents
-        if not document.allowed_groups: # Handles None or empty string
-            return document
-        
-        # Check if the user is part of any of the allowed groups
-        allowed_groups = {g.strip() for g in document.allowed_groups.split(",")}
-        user_groups = set(user_info.get("groups", []))
-        
-        if allowed_groups.intersection(user_groups):
-            return document
-        
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this document. Your groups do not match the required groups.")
+    # Check if the user is authorized to view this specific document
+    authorized = False
 
-    # For any other status or unhandled cases, access is forbidden
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this document.")
+    if is_admin_in_realm:
+        authorized = True # Admins can see any document in their realm
+    elif document.status == DocumentStatus.PUBLISHED:
+        authorized = True # Anyone can see published documents
+    elif is_user_in_realm and document.creator_id == user_context.user_id:
+        authorized = True # Users can see their own documents (even if not published)
+    elif is_reviewer_in_realm and document.current_reviewer_id == user_context.user_id:
+        authorized = True # Reviewers can see documents assigned to them for review
 
+    if not authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to view document with ID {document_id}."
+        )
 
-@app.put("/documents/{document_id}", response_model=DocumentRead)
-async def update_document(
-    document_id: int,
-    document_update: DocumentUpdate,
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    user_info: dict = Depends(get_current_user_roles_and_groups),
-    session: Session = Depends(get_session)
-):
-    document = session.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    # Only creator or admin can update
-    is_admin = "admin" in user_info.get("roles", [])
-    is_creator = document.creator_id == user_id
-
-    if not (is_admin or is_creator):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this document")
-
-    # Handle allowed_groups update
-    if document_update.allowed_groups is not None:
-        if is_creator and document.status not in [DocumentStatus.DRAFT, DocumentStatus.REJECTED]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Creators can only modify groups for documents in DRAFT or REJECTED status."
-            )
-        # If not creator, it must be an admin, who can update groups regardless of status.
-        # Convert list of strings to comma-separated string for storage
-        document.allowed_groups = ",".join(document_update.allowed_groups) if document_update.allowed_groups else None
-        # Remove from update_data so it's not processed again by model_dump
-        document_update.allowed_groups = None # Set to None to exclude from model_dump
-
-    # If the document is published or pending review, only an admin can update its status or re-assign reviewer.
-    if document.status in [DocumentStatus.PUBLISHED, DocumentStatus.PENDING_REVIEW]:
-        if not is_admin:
-            if document_update.status is not None and document_update.status != document.status:
-                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only admins can change status of published or pending review documents."
-                )
-            if document_update.current_reviewer_id is not None and document_update.current_reviewer_id != document.current_reviewer_id:
-                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only admins can re-assign reviewers for pending review documents."
-                )
-
-    # Prevent direct setting of `published_at` via update
-    # if document_update.published_at is not None:
-    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot set 'published_at' directly.")
-
-    update_data = document_update.model_dump(exclude_unset=True)
-    # allowed_groups is already handled above, so no need to delete it from update_data anymore
-    for key, value in update_data.items():
-        if value is not None:
-            setattr(document, key, value)
-    
-    document.last_editor_id = user_id
-
-    session.add(document)
-    session.commit()
-    session.refresh(document)
+    # 4. Return the document details
     return document
 
+
+
+@app.put("/documents/{document_id}", response_model=DocumentWrite)
+def upload_document(
+    document_id: int, # The ID of the document to update
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
+):
+    """
+    Upload specific fields of an existing document.
+    """
+    # 1. Fetch the document from the database
+    db_document = session.get(Document, document_id)
+
+    # 2. Handle Document Not Found
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # 3. Authorization Check
+    realm_id = str(db_document.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_creator = (user_context.user_id == db_document.creator_id)
+
+    # Determine what the user is allowed to update
+    allowed_to_update_all = is_admin_in_realm
+    allowed_to_update_own_draft = is_creator and db_document.status == DocumentStatus.DRAFT
+
+    # If not allowed to update anything, raise Forbidden
+    if not allowed_to_update_all and not allowed_to_update_own_draft:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to update document with ID {document_id} in its current state."
+        )
+
+    # 4. Apply Updates based on Authorization
+    
+    # 5. Save Changes to Database
+    session.add(db_document)
+    session.commit()
+    session.refresh(db_document) # Refresh to get updated_at and any other auto-generated fields
+    
+    # 6. Return the updated document
+    return db_document
+
+
+@app.patch("/documents/{document_id}", response_model=DocumentRead)
+def update_document(
+    document_id: int, # The ID of the document to update
+    document_update: DocumentUpdate, # Request body with fields to update
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
+):
+    """
+    Updates specific fields of an existing document.
+
+    - **document_id**: The ID of the document to update.
+    - **document_update**: The fields to update (e.g., title, description, status, current_reviewer_id).
+    - **Authorization**:
+        - `creator` of the document: Can update `title` and `description` if the document is in `DRAFT` status.
+        - `admin` in the document's realm: Can update any field, including `status` and `current_reviewer_id`.
+    """
+    # 1. Fetch the document from the database
+    db_document = session.get(Document, document_id)
+
+    # 2. Handle Document Not Found
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # 3. Authorization Check
+    realm_id = str(db_document.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_creator = (user_context.user_id == db_document.creator_id)
+
+    # Determine what the user is allowed to update
+    allowed_to_update_all = is_admin_in_realm
+    allowed_to_update_own_draft = is_creator and db_document.status == DocumentStatus.DRAFT
+
+    # If not allowed to update anything, raise Forbidden
+    if not allowed_to_update_all and not allowed_to_update_own_draft:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to update document with ID {document_id} in its current state."
+        )
+
+    # 4. Apply Updates based on Authorization
+    update_data = document_update.model_dump(exclude_unset=True) # Only get fields that were actually sent
+
+    for key, value in update_data.items():
+        if not allowed_to_update_all:
+            # If not an admin, restrict updates to title/description only if it's their draft
+            if key not in ["title", "description"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"User not authorized to update '{key}' field for document with ID {document_id}."
+                )
+            if db_document.status != DocumentStatus.DRAFT:
+                 raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Document with ID {document_id} cannot be updated unless it is in DRAFT status by its creator."
+                )
+        # Apply the update
+        setattr(db_document, key, value)
+
+    # 5. Save Changes to Database
+    session.add(db_document)
+    session.commit()
+    session.refresh(db_document) # Refresh to get updated_at and any other auto-generated fields
+    
+    # 6. Return the updated document
+    return db_document
+
+from models import Document, DocumentRead, DocumentStatus, ReviewRequest
+
+# Assuming 'app' is your FastAPI application instance
+# Assuming 'get_session' and 'get_current_user_context' dependencies are defined as before
 
 @app.post("/documents/{document_id}/submit-for-review", response_model=DocumentRead)
-async def submit_for_review(
-    document_id: int,
-    review_request: ReviewRequest,
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    session: Session = Depends(get_session),
-    user_info: dict = Depends(get_current_user_roles_and_groups) # Included to trigger auth service call and ensure user exists
+def submit_document_for_review(
+    document_id: int, # The ID of the document to submit
+    review_request: ReviewRequest, # Request body containing the reviewer_id
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
 ):
-    document = session.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    """
+    Submits a document for review, changing its status to PENDING_REVIEW and assigning a reviewer.
 
-    if document.creator_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the document creator can submit for review")
+    - **document_id**: The ID of the document to submit.
+    - **review_request**: Contains the `reviewer_id` to whom the document will be assigned.
+    - **Authorization**:
+        - User must be the `creator` of the document OR have `editor`/`admin` role in the document's realm.
+        - Document must currently be in `DRAFT` status.
+    """
+    # 1. Fetch the document from the database
+    db_document = session.get(Document, document_id)
 
-    if document.status not in [DocumentStatus.DRAFT, DocumentStatus.REJECTED]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document must be in DRAFT or REJECTED status to submit for review")
+    # 2. Handle Document Not Found
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
 
-    if review_request.reviewer_id == user_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot assign self as reviewer.")
-    
-    # Validate that reviewer_id is a valid user by attempting to get their info from auth service
-    # If auth service returns an error (e.g., 404), it will raise an HTTPException
-    await get_user_roles_and_groups_from_auth_service(review_request.reviewer_id)
-    # No explicit "reviewer" role check needed anymore, as any valid user can be a reviewer.
+    # 3. Authorization Check
+    realm_id = str(db_document.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_creator = (user_context.user_id == db_document.creator_id)
+    is_editor_in_realm = user_context.has_role_in_realm(realm_id, "editor") # Assuming 'editor' role exists
 
-    document.status = DocumentStatus.PENDING_REVIEW
-    document.current_reviewer_id = review_request.reviewer_id
-    document.last_editor_id = user_id
-    session.add(document)
+    # Only creator, editor, or admin can submit for review
+    if not (is_creator or is_editor_in_realm or is_admin_in_realm):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to submit document with ID {document_id} for review."
+        )
+
+    # Document must be in DRAFT status to be submitted for review
+    if db_document.status != DocumentStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, # 409 Conflict indicates a conflict with current state
+            detail=f"Document with ID {document_id} is not in DRAFT status and cannot be submitted for review."
+        )
+
+    # 4. Update Document Status and Reviewer
+    db_document.status = DocumentStatus.PENDING_REVIEW
+    db_document.current_reviewer_id = review_request.reviewer_id
+
+    # 5. Save Changes to Database
+    session.add(db_document)
     session.commit()
-    session.refresh(document)
+    session.refresh(db_document)
 
-    notification = Notification(
-        sender_id=user_id,
+    create_notification(
+        session=session,
         recipient_id=review_request.reviewer_id,
-        document_id=document.id,
+        sender_id=user_context.user_id,
+        document_id=document_id,
         type=NotificationType.DOCUMENT_FOR_REVIEW,
-        message=f"Document ID {document.id} has been submitted for your review."
+        message=f"Document '{db_document.title}' assigned for your review in realm '{realm_id}'.",
+        realm_id=realm_id
     )
-    session.add(notification)
-    session.commit()
 
-    return document
+    # 6. Return the updated document
+    return db_document
 
-@app.post("/documents/{document_id}/review", response_model=DocumentRead)
-async def review_document(
-    document_id: int,
-    review_action_request: ReviewActionRequest,
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    user_info: dict = Depends(get_current_user_roles_and_groups),
-    session: Session = Depends(get_session)
+@app.post("/documents/{document_id}/review-action", response_model=ReviewActionResult)
+def perform_review_action(
+    document_id: int, # The ID of the document being reviewed
+    review_action_request: ReviewActionRequest, # Request body with action (approve/reject) and reason
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
 ):
-    document = session.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    """
+    Records a review action (approve/reject) for a document and updates its status.
 
-    if document.status != DocumentStatus.PENDING_REVIEW:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document is not in pending review status.")
+    - **document_id**: The ID of the document being reviewed.
+    - **review_action_request**: Contains the `action` (APPROVE/REJECT) and optional `rejection_reason`.
+    - **Authorization**:
+        - User must be the `current_reviewer_id` for the document OR have `admin` role in the document's realm.
+        - Document must currently be in `PENDING_REVIEW` status.
+    """
+    # 1. Fetch the document from the database
+    db_document = session.get(Document, document_id)
 
-    # Authorization: Must be an admin OR the assigned reviewer
-    if "admin" not in user_info.get("roles", []) and document.current_reviewer_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to review this document.")
+    # 2. Handle Document Not Found
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # 3. Authorization Check
+    realm_id = db_document.realm_id
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_current_reviewer = (user_context.user_id == db_document.current_reviewer_id)
+
+    if not (is_current_reviewer or is_admin_in_realm):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to perform review action on document with ID {document_id}."
+        )
+
+    # Document must be in PENDING_REVIEW status
+    if db_document.status != DocumentStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Document with ID {document_id} is not in PENDING_REVIEW status."
+        )
+
+    # 4. Determine New Document Status and Handle Rejection Reason
+    new_document_status: DocumentStatus
+    notification_message: str
+    notification_type: NotificationType
 
     if review_action_request.action == ReviewAction.APPROVE:
-        document.status = DocumentStatus.PUBLISHED
-        document.published_at = datetime.now(timezone.utc)
+        new_document_status = DocumentStatus.PUBLISHED
+        notification_type = NotificationType.DOCUMENT_APPROVED
+        notification_message = f"Your document '{db_document.title}' has been approved and published in realm '{realm_id}'."
+        rejection_reason = None # Clear rejection reason on approval
     elif review_action_request.action == ReviewAction.REJECT:
-        document.status = DocumentStatus.REJECTED
-        if not review_action_request.rejection_reason:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rejection reason is required for rejection.")
-    
-    document.last_editor_id = user_id
-    session.add(document)
-    session.commit()
-    session.refresh(document)
+        new_document_status = DocumentStatus.REJECTED
+        rejection_reason = review_action_request.rejection_reason
+        if not rejection_reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rejection reason is required when rejecting a document."
+            )
+        notification_type = NotificationType.DOCUMENT_REJECTED
+        notification_message = f"Your document '{db_document.title}' has been rejected in realm '{realm_id}'. Reason: {rejection_reason}"
+    else:
+        # This case should ideally be caught by Pydantic validation, but as a safeguard
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid review action."
+        )
 
+    # 5. Create Review Record
     review_record = ReviewRecord(
-        document_id=document.id,
-        reviewer_id=user_id,
+        document_id=document_id,
+        reviewer_id=user_context.user_id,
         action=review_action_request.action,
-        status=document.status,
-        rejection_reason=review_action_request.rejection_reason
+        new_document_status=new_document_status,
+        rejection_reason=rejection_reason,
+        realm_id=realm_id # Associate review record with the realm
     )
+
     session.add(review_record)
     session.commit()
+    session.refresh(review_record)
 
-    notification_type = NotificationType.DOCUMENT_APPROVED if review_action_request.action == ReviewAction.APPROVE else NotificationType.DOCUMENT_REJECTED
-    notification_message = (
-        f"Document ID {document.id} has been approved and published."
-        if review_action_request.action == ReviewAction.APPROVE
-        else f"Document ID {document.id} has been rejected. Reason: {review_action_request.rejection_reason}"
-    )
-    notification = Notification(
-        sender_id=user_id,
-        recipient_id=document.creator_id,
-        document_id=document.id,
-        type=notification_type,
-        message=notification_message
-    )
-    session.add(notification)
+    # 6. Update Document Status and Clear Current Reviewer
+    db_document.status = new_document_status
+    db_document.current_reviewer_id = None # Review process for this stage is complete
+
+    # If published, set published_at timestamp
+    if new_document_status == DocumentStatus.PUBLISHED:
+        db_document.published_at = datetime.now(timezone.utc)
+
+    session.add(db_document)
     session.commit()
+    session.refresh(db_document)
 
-    return document
+    create_notification(
+        session=session,
+        recipient_id=db_document.creator_id, # Notify the document creator
+        sender_id=user_context.user_id,      # The reviewer/admin is the sender
+        document_id=document_id,
+        type=notification_type,              # Notification type based on action
+        message=notification_message,        # Dynamic message
+        realm_id=realm_id
+    )
+
+    # 7. Return the composite result
+    return ReviewActionResult(
+        review_record=review_record,
+        updated_document=db_document
+    )
+
+
+# --- GET Review History Endpoint ---
+@app.get("/documents/{document_id}/review-history", response_model=List[ReviewRecordRead])
+def get_document_review_history(
+    document_id: int, # The ID of the document
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
+):
+    """
+    Retrieves the review history for a specific document.
+
+    - **document_id**: The ID of the document whose review history is requested.
+    - **Authorization**: User must have `viewer`, `editor`, `reviewer`, or `admin` role in the document's realm.
+    """
+    # 1. Fetch the document to get its realm_id for authorization
+    db_document = session.get(Document, document_id)
+
+    # 2. Handle Document Not Found
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # 3. Authorization Check
+    realm_id = int(db_document.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_user_in_realm = user_context.has_role_in_realm(realm_id, "user")
+    is_reviewer_in_realm = user_context.has_role_in_realm(realm_id, "reviewer")
+    is_creator = (user_context.user_id == db_document.creator_id)
+
+    # Any user with a role in the realm or the creator can view history
+    if not (is_admin_in_realm or is_user_in_realm or is_reviewer_in_realm or is_creator):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to view review history for document with ID {document_id}."
+        )
+
+    # 4. Query Review Records
+    # Fetch all review records for this document, ordered by review time
+    review_history_query = select(ReviewRecord).where(ReviewRecord.document_id == document_id).order_by(ReviewRecord.reviewed_at)
+    review_records = session.exec(review_history_query).all()
+
+    # 5. Return the list of review records
+    return review_records
 
 @app.get("/notifications/", response_model=List[NotificationRead])
-async def get_user_notifications(
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    session: Session = Depends(get_session)
+def get_user_notifications(
+    session: Session = Depends(get_session),
+    user_context: UserRoles = Depends(get_current_user_context),
+    is_read: Optional[bool] = Query(None, description="Filter by read status"),
+    type: Optional[NotificationType] = Query(None, description="Filter by notification type"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of notifications to return"),
+    offset: int = Query(0, ge=0, description="Number of notifications to skip")
 ):
-    notifications = session.exec(
-        select(Notification).where(Notification.recipient_id == user_id).order_by(Notification.created_at.desc())
-    ).all()
+    """
+    Retrieves a list of notifications for the authenticated user.
+
+    - **is_read**: Optional filter to get only read (`true`) or unread (`false`) notifications.
+    - **type**: Optional filter to get notifications of a specific type (e.g., 'document_approved').
+    - **limit, offset**: For pagination.
+    - **Authorization**: User must be authenticated.
+    """
+    # Start with a query for notifications belonging to the current user
+    query = select(Notification).where(Notification.recipient_id == user_context.user_id)
+
+    # Apply optional filters
+    if is_read is not None:
+        query = query.where(Notification.is_read == is_read)
+    if type is not None:
+        query = query.where(Notification.type == type)
+
+    # Apply pagination
+    query = query.offset(offset).limit(limit)
+
+    notifications = session.exec(query).all()
+
     return notifications
 
-@app.patch("/notifications/{notification_id}/mark-as-read", status_code=status.HTTP_204_NO_CONTENT)
-async def mark_notification_as_read(
+
+@app.patch("/notifications/{notification_id}", response_model=NotificationRead)
+def mark_notification_status(
     notification_id: int,
-    user_id: Annotated[int, Header(alias="X-User-Id")],
-    session: Session = Depends(get_session)
-):
-    notification = session.get(Notification, notification_id)
-    if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-    
-    if notification.recipient_id != user_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-
-    notification.is_read = True
-    session.add(notification)
-    session.commit()
-
-# --- Admin Endpoints ---
-
-@app.patch("/admin/documents/{document_id}/assign-reviewer", response_model=DocumentRead)
-async def admin_assign_reviewer(
-    document_id: int,
-    review_request: ReviewRequest,
-    admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
-):
-    document = session.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    # Validate that reviewer_id is a valid user by attempting to get their info from auth service
-    await get_user_roles_and_groups_from_auth_service(review_request.reviewer_id)
-    # No explicit "reviewer" role check needed, as any valid user can be a reviewer.
-
-    document.current_reviewer_id = review_request.reviewer_id
-    document.status = DocumentStatus.PENDING_REVIEW
-    document.last_editor_id = admin_user_id
-
-    session.add(document)
-    session.commit()
-    session.refresh(document)
-
-    notification = Notification(
-        sender_id=admin_user_id,
-        recipient_id=review_request.reviewer_id,
-        document_id=document.id,
-        type=NotificationType.DOCUMENT_FOR_REVIEW,
-        message=f"Document ID {document.id} has been assigned to you for review by an admin."
-    )
-    session.add(notification)
-    session.commit()
-
-    return document
-
-@app.post("/admin/documents/{document_id}/set-groups", response_model=DocumentRead)
-async def admin_set_document_groups(
-    document_id: int,
-    groups: List[str],
-    admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
-):
-    document = session.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    
-    # Removed: if document.status != DocumentStatus.PUBLISHED:
-    # Admins can set groups regardless of document status.
-
-    document.allowed_groups = ",".join(groups) if groups else None
-    document.last_editor_id = admin_user_id
-
-    session.add(document)
-    session.commit()
-    session.refresh(document)
-    return document
-
-
-@app.get("/admin/documents/{document_id}/history", response_model=List[ReviewRecordRead])
-async def admin_get_document_history(
-    document_id: int,
-    admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
-):
-    document = session.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-        
-    history = session.exec(
-        select(ReviewRecord).where(ReviewRecord.document_id == document_id).order_by(ReviewRecord.reviewed_at.asc())
-    ).all()
-    return history
-
-@app.post("/admin/groups/", response_model=GroupRead, status_code=status.HTTP_201_CREATED)
-async def create_group(
-    group_create: GroupCreate,
-    # admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
+    status_update: NotificationMarkReadRequest,
+    session: Session = Depends(get_session),
+    user_context: UserRoles = Depends(get_current_user_context)
 ):
     """
-    Create a new group (admin only).
-    
-    Args:
-        group_create: GroupCreate model with group_id and group_name.
-        admin_user_id: ID of the admin user (verified).
-        session: Database session.
-    
-    Returns:
-        GroupRead: The created group.
-    
-    Raises:
-        HTTPException: If group_id already exists.
-    """
-    existing_group = session.get(Group, group_create.group_id)
-    if existing_group:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Group with ID {group_create.group_id} already exists."
-        )
-    group = Group(
-        group_id=group_create.group_id,
-        group_name=group_create.group_name
-    )
-    session.add(group)
-    session.commit()
-    session.refresh(group)
-    return group
+    Marks a specific notification as read or unread.
 
-@app.delete("/admin/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_group(
-    group_id: str,
-    # admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
-):
+    - **notification_id**: The ID of the notification to update.
+    - **status_update**: Request body containing the `is_read` status (true/false).
+    - **Authorization**: User must be the `recipient_id` of the notification or have `admin` role in the notification's `realm_id`.
     """
-    Delete a group by group_id (admin only).
-    
-    Args:
-        group_id: ID of the group to delete.
-        admin_user_id: ID of the admin user (verified).
-        session: Database session.
-    
-    Raises:
-        HTTPException: If group_id does not exist.
-    """
-    group = session.get(Group, group_id)
-    if not group:
+    # 1. Fetch the notification
+    db_notification = session.get(Notification, notification_id)
+
+    # 2. Handle Notification Not Found
+    if not db_notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Group with ID {group_id} not found."
+            detail=f"Notification with ID {notification_id} not found."
         )
-    session.delete(group)
+
+    # 3. Authorization Check
+    realm_id = str(db_notification.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_recipient = (user_context.user_id == db_notification.recipient_id)
+
+    if not (is_recipient or is_admin_in_realm):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to modify notification with ID {notification_id}."
+        )
+
+    # 4. Apply Update
+    db_notification.is_read = status_update.is_read
+
+    # 5. Save Changes to Database
+    session.add(db_notification)
     session.commit()
+    session.refresh(db_notification)
 
-@app.post("/admin/groups/assign-roles", status_code=status.HTTP_204_NO_CONTENT)
-async def assign_group_roles(
-    assignment: GroupRoleAssignment,
-    # admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
-):
-    """
-    Assign roles to a user in a group (admin only).
-    
-    Args:
-        assignment: GroupRoleAssignment with username, group_name, and roles.
-        admin_user_id: ID of the admin user (verified).
-        session: Database session.
-    
-    Raises:
-        HTTPException: If user or group is not found, or invalid roles.
-    """
-    # Find user by username
-    user = session.exec(
-        select(User).where(User.username == assignment.username)
-    ).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with username {assignment.username} not found."
-        )
-    
-    # Find group by group_name
-    group = session.exec(
-        select(Group).where(Group.group_name == assignment.group_name)
-    ).first()
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Group with name {assignment.group_name} not found."
-        )
-    
-    # Validate roles
-    valid_roles = {UserRole.USER, UserRole.ADMIN}
-    invalid_roles = set(assignment.roles) - valid_roles
-    if invalid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid roles: {invalid_roles}. Valid roles are {valid_roles}."
-        )
-    
-    # Delete existing role assignments for this user in this group
-    session.exec(
-        UserGroupRole.__table__.delete().where(
-            UserGroupRole.user_uid == user.uid,
-            UserGroupRole.group_id == group.group_id
-        )
-    )
-    
-    # Create new role assignments
-    for role in assignment.roles:
-        user_group_role = UserGroupRole(
-            user_uid=user.uid,
-            group_id=group.group_id,
-            role=role
-        )
-        session.add(user_group_role)
-    
-    session.commit()
-
-@app.delete("/admin/groups/remove-roles", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_group_roles(
-    assignment: GroupRoleAssignment,
-    # admin_user_id: Annotated[int, Depends(verify_admin_role)],
-    session: Session = Depends(get_session)
-):
-    """
-    Remove specific roles for a user in a group (admin only).
-    
-    Args:
-        assignment: GroupRoleAssignment with username, group_name, and roles to remove.
-        admin_user_id: ID of the admin user (verified).
-        session: Database session.
-    
-    Raises:
-        HTTPException: If user or group is not found, or invalid roles.
-    """
-    # Find user by username
-    user = session.exec(
-        select(User).where(User.username == assignment.username)
-    ).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with username {assignment.username} not found."
-        )
-    
-    # Find group by group_name
-    group = session.exec(
-        select(Group).where(Group.group_name == assignment.group_name)
-    ).first()
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Group with name {assignment.group_name} not found."
-        )
-    
-    # Validate roles
-    valid_roles = {UserRole.USER, UserRole.ADMIN}
-    invalid_roles = set(assignment.roles) - valid_roles
-    if invalid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid roles: {invalid_roles}. Valid roles are {valid_roles}."
-        )
-    
-    # Delete specified role assignments
-    for role in assignment.roles:
-        session.exec(
-            UserGroupRole.__table__.delete().where(
-                UserGroupRole.user_uid == user.uid,
-                UserGroupRole.group_id == group.group_id,
-                UserGroupRole.role == role
-            )
-        )
-    
-    session.commit()
-
-@app.get("/me")
-async def get_current_user(
-    token: str,
-    session: Session = Depends(get_session)
-) -> dict:
-    try:
-        # Decode JWT with validation
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id: str = payload.get("user_id")
-        username: str = payload.get("username")
-        global_role: str = payload.get("global_role")
-
-        if not user_id or not username or not global_role:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload: missing user_id, username, or global_role"
-            )
-
-        # Fetch user from database
-        user = session.get(User, user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found in database"
-            )
-
-        # Fetch group roles from UserGroupRole
-        group_roles = session.exec(
-            select(UserGroupRole).where(UserGroupRole.user_uid == user_id)
-        ).all()
-
-        # Construct ACL dictionary
-        acl = {}
-        for group_role in group_roles:
-            group_id = group_role.group_id
-            role = group_role.role
-            if group_id not in acl:
-                acl[group_id] = {"role": []}
-            acl[group_id]["role"].append(role)
-
-        # Return user info in the specified format
-        return {
-            "ACL": acl,
-            "global_role": global_role,
-            "username": username,
-            "uid": user_id
-        }
-
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during token processing: {str(e)}"
-        )
-
-
-
-@app.get("/admin/users/", response_model=List[UserRead])
-async def get_all_users(
-    session: Session = Depends(get_session)
-):
-    """
-    Retrieve all users (admin only, for development use).
-    
-    Args:
-        admin_user_info: User info from JWT, verified to have admin role.
-        session: Database session.
-    
-    Returns:
-        List[UserRead]: List of all users in the database.
-    """
-    users = session.exec(select(User)).all()
-    return [UserRead.from_orm(user) for user in users]
-
-@app.get("/admin/groups/all/", response_model=List[GroupRead])
-async def get_all_groups(
-    session: Session = Depends(get_session)
-):
-    """
-    Retrieve all groups (admin only, for development use).
-    
-    Args:
-        admin_user_info: User info from JWT, verified to have admin role.
-        session: Database session.
-    
-    Returns:
-        List[GroupRead]: List of all groups in the database.
-    """
-    groups = session.exec(select(Group)).all()
-    return [GroupRead.from_orm(group) for group in groups]
-
-@app.get("/admin/user-group-roles/", response_model=List[UserGroupRole])
-async def get_all_user_group_roles(
-    session: Session = Depends(get_session)
-):
-    """
-    Retrieve all user-group-role assignments (admin only, for development use).
-    
-    Args:
-        admin_user_info: User info from JWT, verified to have admin role.
-        session: Database session.
-    
-    Returns:
-        List[UserGroupRole]: List of all user-group-role assignments in the database.
-    """
-    user_group_roles = session.exec(select(UserGroupRole)).all()
-    return user_group_roles
+    # 6. Return the updated notification
+    return db_notification
