@@ -56,32 +56,17 @@
           <div class="space-y-4">
             <button
               v-if="!isTokenReceived"
-              @click="NYCUOAuthLogin"
+              @click="GoogleOAuthLogin"
               class="w-full border border-cyan-700 text-cyan-700 font-bold py-2 px-4 rounded-lg 
                      transition-colors duration-200 hover:bg-cyan-700 hover:text-white
                      flex items-center justify-center"
             >
               <img
-                src="/images/nycu-oauth.svg"
-                alt="NYCU Logo"
+                src="/images/google-oauth.webp"
+                alt="Google Logo"
                 class="w-6 h-6 mr-2"
               />
-              NYCU OAuth
-            </button>
-
-            <button
-              v-if="!isTokenReceived"
-              @click="CSITOAuthLogin"
-              class="w-full border border-cyan-700 text-cyan-700 font-bold py-2 px-4 rounded-lg 
-                     transition-colors duration-200 hover:bg-cyan-700 hover:text-white
-                     flex items-center justify-center"
-            >
-              <img
-                src="/images/csit-oauth.svg"
-                alt="CSIT Logo"
-                class="w-6 h-6 mr-2"
-              />
-              CSIT OAuth
+              Google OAuth
             </button>
 
             <p v-if="isTokenReceived" class="text-center text-cyan-500 font-semibold">
@@ -130,7 +115,7 @@ export default {
         formData.append("username", username.value);
         formData.append("password", password.value);
 
-        const response = await fetch(`${apiBase}/login`, {
+        const response = await fetch(`${apiBase}/auth/login`, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -155,12 +140,8 @@ export default {
       }
     };
 
-    const NYCUOAuthLogin = () => {
-      window.location.href = `${apiBase}/oauth/nycu/login`;
-    };
-
-    const CSITOAuthLogin = () => {
-      window.location.href = `${apiBase}/oauth/csit/login`;
+    const GoogleOAuthLogin = () => {
+      window.location.href = `${apiBase}/auth/oauth/google/login`;
     };
 
     return {
@@ -168,8 +149,7 @@ export default {
       password,
       isTokenReceived,
       localLogin,
-      NYCUOAuthLogin,
-      CSITOAuthLogin,
+      GoogleOAuthLogin,
     };
   },
 };

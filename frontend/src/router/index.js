@@ -51,21 +51,21 @@ const router = createRouter({
   routes,
 });
 
-// router.beforeEach((to, from, next) => {
-//   const token = localStorage.getItem("jwtToken");
-//   if (to.meta.requiresAuth) {
-//     if (!token) {
-//       next({ name: "Login" });
-//     } else {
-//       next();
-//     }
-//   } else {
-//     if (to.name === "Login" && token) {
-//       next({ name: "Home" });
-//     } else {
-//       next();
-//     }
-//   }
-// });
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem("jwtToken");
+  if (to.meta.requiresAuth) {
+    if (!token) {
+      next({ name: "Login" });
+    } else {
+      next();
+    }
+  } else {
+    if (to.name === "Login" && token) {
+      next({ name: "Home" });
+    } else {
+      next();
+    }
+  }
+});
 
 export default router;

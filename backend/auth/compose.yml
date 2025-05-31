@@ -1,0 +1,51 @@
+services:
+  web:
+    # Build the image from the Dockerfile in the current directory
+    build: .
+    depends_on:
+      pg:  # Ensure PostgreSQL is started before the web service
+        condition: service_healthy
+    # Use the uvicorn server to run the FastAPI application
+    # Host the FastAPI application on port 8000
+    ports:
+      - "8002:8000"
+    env_file:
+      - .env
+    develop:
+      # Create a `watch` configuration to update the app
+      # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
+      watch:
+        # Sync the working directory with the `/app` directory in the container
+        - action: sync
+          path: .
+          target: /app
+          # Exclude the project virtual environment — it could be for a
+          # different platform in the container
+          ignore:
+            - .venv/
+
+        # Rebuild the image if dependencies change by checking uv.lock
+        - action: rebuild
+          path: ./uv.lock
+  pg:
+    # Use the official PostgreSQL image
+    image: postgres:latest
+
+    # Set environment variables for PostgreSQL
+    environment:
+      POSTGRES_USER: admin
+      PGUSER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: database
+
+    # Expose PostgreSQL on port 5432
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "admin","-d", "database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Use a volume to persist data
+    # volumes:
+    #   - pg_data:/var/lib/postgresql/data

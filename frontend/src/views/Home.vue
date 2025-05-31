@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-[calc(100vh-3.5rem)] bg-gray-950 text-gray-100 font-sans">
     <!-- Not Logged In View -->
-    <div v-if="isLoggedIn" class="w-full flex items-center justify-center">
+    <div v-if="!isLoggedIn" class="w-full flex items-center justify-center">
       <div class="text-center space-y-6">
         <h1 class="text-5xl font-bold text-gray-100">Document Center</h1>
         <p class="text-xl text-gray-400 py-4">
@@ -43,7 +43,6 @@
           </router-link>
         </div>
 
-        <!-- Documents Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           <div
             v-for="doc in documents"
@@ -63,7 +62,9 @@
                 </span>
               </div>
 
-              <p class="text-gray-400 text-sm mb-4 line-clamp-2 h-[2.5rem] overflow-hidden">
+              <p
+                class="text-gray-400 text-sm mb-4 line-clamp-2 h-[2.5rem] overflow-hidden"
+              >
                 {{ doc.content }}
               </p>
 
@@ -74,7 +75,9 @@
               </div>
             </div>
 
-            <div class="p-4 border-t border-gray-700 bg-gray-800/50 min-h-[4rem] flex items-center">
+            <div
+              class="p-4 border-t border-gray-700 bg-gray-800/50 min-h-[4rem] flex items-center"
+            >
               <div class="flex justify-end gap-3 w-full">
                 <!-- Draft actions -->
                 <template v-if="doc.status === 'Draft'">
@@ -131,72 +134,94 @@
 </template>
 
 <script>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { documentService } from "../services/api";
 import { authStore } from "../store/auth";
 
 export default {
   name: "Home",
   setup() {
-    const isLoggedIn = computed(() => !!authStore.token);
+    const router = useRouter();
+    const route = useRoute();
+    const documents = ref([]);
+    const isLoggedIn = computed(() => authStore.token);
     const isReviewer = ref(true);
-
-    const documents = ref([
-      {
-        id: 1,
-        title: "Test Document",
-        content:
-          "This is a test document that shows how the layout will look with actual content...",
-        lastEdited: "2 days ago",
-        type: "Markdown",
-        status: "Draft",
-      },
-      {
-        id: 2,
-        title: "Pending Review Doc",
-        content: "This document is waiting for review...",
-        lastEdited: "1 day ago",
-        type: "Markdown",
-        status: "Pending Review",
-      },
-      {
-        id: 3,
-        title: "Published Document",
-        content: "This is a published document...",
-        lastEdited: "5 days ago",
-        type: "Markdown",
-        status: "Published",
-      },
-    ]);
 
     const getStatusClass = (status) => {
       const classes = {
-        Draft: "bg-gray-600 text-white",
-        "Pending Review": "bg-yellow-600 text-white",
-        Published: "bg-green-600 text-white",
-        Rejected: "bg-red-600 text-white",
+        Draft: "bg-gray-600 text-gray-100",
+        "Pending Review": "bg-yellow-600 text-yellow-100",
+        Published: "bg-green-600 text-green-100",
+        Rejected: "bg-red-600 text-red-100",
       };
-      return classes[status] || "bg-gray-600 text-white";
+      return classes[status] || "bg-gray-600 text-gray-100";
     };
 
-    const submitForReview = (docId) => {
-      // TODO: Implement submit for review logic
+    const fetchDocuments = async () => {
+      try {
+        const response = await documentService.getAllDocuments();
+        documents.value = response.data;
+      } catch (error) {
+        console.error("Error fetching documents:", error);
+      }
+    };
+
+    const submitForReview = async (docId) => {
+      try {
+        const reviewerId = "some-reviewer-id"; // Replace with actual reviewer ID logic
+        await documentService.submitForReview(docId, reviewerId);
+        await fetchDocuments();
+      } catch (error) {
+        console.error("Error submitting for review:", error);
+      }
     };
 
     const editDocument = (docId) => {
-      // TODO: Implement edit logic
+      if (!docId) {
+        console.error("No document ID provided");
+        return;
+      }
+      router.push(`/editor/${docId}`);
     };
 
     const reviewDocument = (docId) => {
-      // TODO: Implement review logic
+      if (!docId) {
+        console.error("No document ID provided");
+        return;
+      }
+      router.push(`/review/${docId}`);
     };
 
     const viewDocument = (docId) => {
-      // TODO: Implement view logic
+      if (!docId) {
+        console.error("No document ID provided");
+        return;
+      }
+      router.push(`/viewer/${docId}`);
     };
 
-    const createNewVersion = (docId) => {
-      // TODO: Implement new version logic
+    const createNewVersion = async (docId) => {
+      if (!docId) {
+        console.error("No document ID provided");
+        return;
+      }
+      try {
+        const response = await documentService.createDocument({
+          originalId: docId,
+          type: "new_version",
+        });
+        router.push(`/editor/${response.data.id}`);
+      } catch (error) {
+        console.error("Error creating new version:", error);
+      }
     };
+
+    onMounted(async () => {
+      if (isLoggedIn.value) {
+        await fetchDocuments();
+      }
+    });
 
     return {
       isLoggedIn,
