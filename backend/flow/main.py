@@ -21,8 +21,18 @@ from models import (
     NotificationType,
     Notification,
     NotificationMarkReadRequest,
-    get_s3_url_from_id # If get_s3_url_from_id is in models.py, otherwise import from utils.py
+    DocumentWrite
 )
+from minio import get_upload_s3_url, get_read_s3_url
+import jwt # pip install python-jose[cryptography] or pyjwt
+from jwt import PyJWTError
+import os
+# --- Configuration (IMPORTANT: Replace with environment variables in production) ---
+# This is a dummy secret key for DEMONSTRATION.
+# In production, this would be a real secret from your auth microservice,
+# or better yet, a public key/certificate for JWT signature verification.
+SECRET_KEY = os.getenv("SECRET_KEY", "your-very-secret-jwt-signing-key")  # SHOULD BE FROM ENV VAR
+ALGORITHM = os.getenv("ALGORITHM", "HS256")  # Or RS256, ES256 if using asymmetric keys
 
 import jwt # pip install python-jose[cryptography] or pyjwt
 from jwt import PyJWTError
@@ -315,8 +325,52 @@ def get_document_detail(
     return document
 
 
-# Assuming 'app' is your FastAPI application instance
-# Assuming 'get_session' and 'get_current_user_context' dependencies are defined as before
+
+@app.put("/documents/{document_id}", response_model=DocumentWrite)
+def upload_document(
+    document_id: int, # The ID of the document to update
+    session: Session = Depends(get_session), # Database session dependency
+    user_context: UserRoles = Depends(get_current_user_context) # Authenticated user context dependency
+):
+    """
+    Upload specific fields of an existing document.
+    """
+    # 1. Fetch the document from the database
+    db_document = session.get(Document, document_id)
+
+    # 2. Handle Document Not Found
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # 3. Authorization Check
+    realm_id = str(db_document.realm_id)
+    is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
+    is_creator = (user_context.user_id == db_document.creator_id)
+
+    # Determine what the user is allowed to update
+    allowed_to_update_all = is_admin_in_realm
+    allowed_to_update_own_draft = is_creator and db_document.status == DocumentStatus.DRAFT
+
+    # If not allowed to update anything, raise Forbidden
+    if not allowed_to_update_all and not allowed_to_update_own_draft:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User not authorized to update document with ID {document_id} in its current state."
+        )
+
+    # 4. Apply Updates based on Authorization
+    
+    # 5. Save Changes to Database
+    session.add(db_document)
+    session.commit()
+    session.refresh(db_document) # Refresh to get updated_at and any other auto-generated fields
+    
+    # 6. Return the updated document
+    return db_document
+
 
 @app.patch("/documents/{document_id}", response_model=DocumentRead)
 def update_document(
@@ -383,7 +437,7 @@ def update_document(
     session.add(db_document)
     session.commit()
     session.refresh(db_document) # Refresh to get updated_at and any other auto-generated fields
-
+    
     # 6. Return the updated document
     return db_document
 
