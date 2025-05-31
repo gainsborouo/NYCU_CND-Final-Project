@@ -33,7 +33,6 @@ export const documentService = {
       const payload = JSON.parse(atob(token.split(".")[1]));
       const realmIds = Object.keys(payload.realm_roles);
       
-      // 並行請求所有 realm 的文檔
       const promises = realmIds.map(realmId => 
         api.get(`/flow/documents/${realmId}`)
           .then(response => ({
