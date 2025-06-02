@@ -45,59 +45,104 @@
           </div>
         </div>
       </div>
+
+      <!-- Loading and Error States -->
+      <!-- <div v-if="loading" class="text-center py-4">
+        <span class="loader"></span>
+      </div> -->
+      <!-- <div v-if="error" class="text-red-500 text-center py-4">
+        {{ error }}
+      </div> -->
     </div>
   </div>
 </template>
 
 <script>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { notificationService } from "../services/api";
 
 export default {
   name: "Notifications",
   setup() {
     const router = useRouter();
+    const notifications = ref([]);
+    const loading = ref(false);
+    const error = ref(null);
 
-    const notifications = ref([
-      {
-        id: 1,
-        type: "review_request",
-        title: "Review Request: Safety Guidelines Update",
-        message: "John Doe has submitted a document for your review.",
-        time: "10 minutes ago",
-        documentId: 123,
-        isRead: false,
-      },
-      {
-        id: 2,
-        type: "review_complete",
-        title: "Document Approved: Manufacturing Process",
-        message: "Your document has been approved by Jane Smith.",
-        time: "2 hours ago",
-        documentId: 456,
-        isRead: false,
-      },
-      {
-        id: 3,
-        type: "review_request",
-        title: "Review Request: Equipment Manual",
-        message:
-          "Alex Johnson needs your review on updated equipment procedures.",
-        time: "1 day ago",
-        documentId: 789,
-        isRead: false,
-      },
-      {
-        id: 4,
-        type: "review_complete",
-        title: "Document Rejected: Training Guide",
-        message:
-          "Your document was rejected. Please check the comments and revise.",
-        time: "2 days ago",
-        documentId: 101,
-        isRead: true,
-      },
-    ]);
+    const fetchNotifications = async () => {
+      try {
+        loading.value = true;
+        const response = await notificationService.getNotifications();
+        notifications.value = response.data.map((notification) => ({
+          id: notification.id,
+          type: notification.type,
+          title: formatNotificationTitle(notification),
+          message: notification.message,
+          time: formatDate(notification.created_at),
+          documentId: notification.document_id,
+          isRead: notification.is_read,
+        }));
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+        error.value = "Failed to load notifications";
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    const formatNotificationTitle = (notification) => {
+      switch (notification.type) {
+        case "document_for_review":
+          return "Review Request";
+        case "document_approved":
+          return "Document Approved";
+        case "document_rejected":
+          return "Document Rejected";
+        case "document_state_change":
+          return "Document Status Updated";
+        case "review_request_cancelled":
+          return "Review Request Cancelled";
+        default:
+          return "Notification";
+      }
+    };
+
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now - date;
+
+      // Convert to minutes
+      const minutes = Math.floor(diff / 60000);
+
+      if (minutes < 60) {
+        return `${minutes} minutes ago`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) {
+        return `${hours} hours ago`;
+      }
+
+      const days = Math.floor(hours / 24);
+      return `${days} days ago`;
+    };
+
+    const markAsRead = async (notificationId) => {
+      try {
+        await notificationService.markNotificationStatus(notificationId, true);
+        const notification = notifications.value.find(
+          (n) => n.id === notificationId
+        );
+        if (notification) {
+          notification.isRead = true;
+        }
+      } catch (err) {
+        console.error("Error marking notification as read:", err);
+        error.value = "Failed to update notification";
+      }
+    };
 
     const goToReview = (documentId) => {
       router.push(`/review/${documentId}`);
@@ -107,19 +152,14 @@ export default {
       router.push(`/viewer/${documentId}`);
     };
 
-    const markAsRead = (notificationId) => {
-      const notification = notifications.value.find(
-        (n) => n.id === notificationId
-      );
-      if (notification) {
-        notification.isRead = true;
-        // TODO: Update backend when implemented
-        console.log("Marked as read:", notificationId);
-      }
-    };
+    onMounted(() => {
+      fetchNotifications();
+    });
 
     return {
       notifications,
+      loading,
+      error,
       goToReview,
       viewDocument,
       markAsRead,
@@ -138,5 +178,23 @@ export default {
 .notification-leave-to {
   opacity: 0;
   transform: translateX(30px);
+}
+
+.loader {
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>

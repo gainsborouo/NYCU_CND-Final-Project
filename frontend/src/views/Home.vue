@@ -251,7 +251,7 @@
 <script>
 import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { documentService, authService } from "../services/api";
+import { documentService, authService, notificationService } from "../services/api";
 import { authStore } from "../store/auth";
 import SubmitForReviewModal from "../components/SubmitForReviewModal.vue";
 
@@ -338,6 +338,17 @@ export default {
       selectedDocumentId.value = docId;
       selectedGroupId.value = doc.realmId;
       showSubmitModal.value = true;
+
+      try {
+        await notificationService.createNotification(
+          doc.currentReviewerId,
+          docId,
+          'document_for_review',
+          `Document "${doc.title}" needs your review`
+        );
+      } catch (error) {
+        console.error('Error sending notification:', error);
+      }
     };
 
     const editDocument = (docId) => {

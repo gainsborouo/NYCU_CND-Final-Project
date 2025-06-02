@@ -130,11 +130,12 @@
 <script>
 import { ref, computed, watch, nextTick, onMounted } from "vue";
 import { useRoute } from "vue-router";
-import { documentService, authService } from "../services/api";
+import { documentService, authService, fileService } from "../services/api";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import DOMPurify from "dompurify";
+import { v4 as uuidv4 } from "uuid";
 
 const md = new MarkdownIt({
   html: true,
@@ -339,25 +340,114 @@ export default {
     );
 
     const handleDrop = async (event) => {
-      const files = Array.from(event.dataTransfer.files).filter((file) =>
-        file.type.startsWith("image/")
-      );
-      if (files.length === 0) return;
+      try {
+        const files = Array.from(event.dataTransfer.files).filter((file) =>
+          file && file.type && file.type.startsWith("image/")
+        );
+        
+        if (files.length === 0) {
+          console.warn("No valid image files found");
+          return;
+        }
 
-      event.preventDefault();
-      event.stopPropagation();
+        event.preventDefault();
+        event.stopPropagation();
 
-      const textarea = textareaRef.value;
-      if (textarea) textarea.focus();
+        const textarea = textareaRef.value;
+        if (textarea) textarea.focus();
 
-      for (const file of files) {
-        const imageUrl = await uploadImage(file);
-        insertMarkdownImage(imageUrl);
+        for (const file of files) {
+          const loadingText = `![Uploading ${file.name}...]()\n`;
+          try {
+            // Add loading indicator before upload
+            insertText(loadingText);
+
+            const imageUrl = await uploadImage(file);
+            
+            // Replace loading text with actual image
+            markdown.value = markdown.value.replace(
+              loadingText,
+              `![${file.name}](${imageUrl})\n`
+            );
+          } catch (error) {
+            console.error(`Failed to upload image: ${file.name}`, error);
+            // Remove loading text on error
+            markdown.value = markdown.value.replace(loadingText, '');
+          }
+        }
+      } catch (error) {
+        console.error("Error handling file drop:", error);
       }
     };
 
+    // Helper function to insert text at cursor position
+    const insertText = (text) => {
+      const textarea = textareaRef.value;
+      const pos = cursorPosition.value;
+      const before = markdown.value.substring(0, pos);
+      const after = markdown.value.substring(pos);
+      markdown.value = `${before}${text}${after}`;
+      
+      // Update cursor position
+      textarea.focus();
+      const newPos = pos + text.length;
+      textarea.setSelectionRange(newPos, newPos);
+      cursorPosition.value = newPos;
+    };
+
     const uploadImage = async (file) => {
-      return "https://cdn.example.com/image.jpg";
+      // Get user token first
+      const token = localStorage.getItem("jwtToken");
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        // Validate file
+        if (!file || !file.name) {
+          throw new Error('Invalid file object');
+        }
+
+        // Parse token to get uid
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const uid = payload.uid;
+
+        if (!uid) {
+          throw new Error('User ID not found in token');
+        }
+
+        // Get file extension with fallback
+        const fileNameParts = file.name.split('.');
+        const fileExt = fileNameParts.length > 1 ? fileNameParts.pop() : 'png';
+        
+        // Generate unique filename
+        const uuid = uuidv4();
+        const filename = `${uuid}.${fileExt}`;
+
+        // Get upload URL
+        const { url: uploadUrl } = await fileService.generateUploadUrl(uid, filename);
+
+        if (!uploadUrl) {
+          throw new Error('Failed to get upload URL');
+        }
+
+        const response = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type || 'image/png',
+          },
+          body: file,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        return `${import.meta.env.VITE_API_BASE_URL}minio-api/files/${uid}/${filename}`;
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        throw error;
+      }
     };
 
     const insertMarkdownImage = (url) => {
@@ -526,12 +616,12 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .save-success {
-  background-color: rgba(22, 163, 74, 0.8); /* bg-green-600/80 */
+  background-color: rgba(22, 163, 74, 0.6); /* bg-green-600/80 */
   transform: scale(1.05);
 }
 
 .save-error {
-  background-color: rgba(220, 38, 38, 0.8); /* bg-red-600/80 */
+  background-color: rgba(220, 38, 38, 0.6); /* bg-red-600/80 */
   animation: shake 0.5s ease-in-out;
 }
 

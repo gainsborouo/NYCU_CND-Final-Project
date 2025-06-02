@@ -201,11 +201,31 @@ export const authService = {
 };
 
 export const notificationService = {
-  getNotifications() {
-    return api.get("/flow/notifications/");
+  getNotifications(params = {}) {
+    return api.get("/flow/notifications", { params });
   },
 
-  markAsRead(notificationId) {
-    return api.patch(`/flow/notifications/${notificationId}/mark-as-read`);
+  markNotificationStatus(notificationId, isRead) {
+    return api.patch(`/flow/notifications/${notificationId}`, {
+      is_read: isRead,
+    });
+  },
+
+  async createNotification(recipientId, documentId, type, message) {
+    return api.post('/flow/notifications', {
+      recipient_id: recipientId,
+      document_id: documentId,
+      type,
+      message
+    });
+  }
+};
+
+export const fileService = {
+  async generateUploadUrl(uid, filename) {
+    const response = await api.post(`/minio-api/generate-upload-url/${uid}`, {
+      filename,
+    });
+    return response.data;
   },
 };
