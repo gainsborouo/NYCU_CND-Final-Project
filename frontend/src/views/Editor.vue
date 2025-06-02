@@ -1,5 +1,7 @@
 <template>
-  <div class="flex h-[calc(100vh-3.5rem)] bg-gray-900 text-gray-100 font-sans">
+  <div
+    class="flex h-[calc(100vh-3.5rem)] bg-gray-900 text-gray-100 font-sans relative"
+  >
     <!-- Markdown Editor -->
     <div
       class="w-1/2 border-r border-gray-700 flex bg-gray-800"
@@ -27,11 +29,33 @@
         <div v-html="renderedMarkdown"></div>
       </div>
     </div>
+
+    <!-- Floating Save Button -->
+    <div class="fixed bottom-6 right-6">
+      <button
+        @click="saveDocument"
+        class="px-4 py-2 bg-cyan-700/80 hover:bg-cyan-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2 hover:scale-105 save-button"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            d="M17 3a1 1 0 00-1-1h-3.586A2 2 0 0011 2.586L9.414 4H5a1 1 0 00-1 1v12a1 1 0 001 1h10a1 1 0 001-1V3zm-6 0h2v2h-2V3zM6 14v-2h8v2H6z"
+          />
+        </svg>
+        Save
+      </button>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onMounted } from "vue";
+import { useRoute } from "vue-router";
+import { documentService } from "../services/api";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
@@ -90,9 +114,11 @@ md.core.ruler.after("block", "add_line_numbers", (state) => {
 export default {
   name: "MarkdownEditor",
   setup() {
-    const markdown = ref(
-      `# Welcome\n\n### 使用組件\n\n在主應用組件中使用 Greeting 組件：\n\n\`\`\`jsx\n// src/App.jsx\nimport React from "react";\nimport Greeting from "./components/Greeting";\n\nfunction App() {\n  return (\n    <div className="App">\n      <Greeting name="Alice" />\n      <Greeting name="Bob" />\n    </div>\n  );\n}\n\`\`\``
-    );
+    const route = useRoute();
+    // const markdown = ref(
+    //   `# Welcome\n\n### 使用組件\n\n在主應用組件中使用 Greeting 組件：\n\n\`\`\`jsx\n// src/App.jsx\nimport React from "react";\nimport Greeting from "./components/Greeting";\n\nfunction App() {\n  return (\n    <div className="App">\n      <Greeting name="Alice" />\n      <Greeting name="Bob" />\n    </div>\n  );\n}\n\`\`\``
+    // );
+    const markdown = ref(``);
 
     const textareaRef = ref(null);
     const previewRef = ref(null);
@@ -242,6 +268,26 @@ export default {
       cursorPosition.value = newPos;
     };
 
+    const fetchDocument = async () => {
+      try {
+        const documentId = route.params.id;
+        const { data } = await documentService.getDocumentDetail(documentId);
+
+        console.log("Fetched document data:", data);
+
+        if (data.url) {
+          const content = await documentService.getMarkdownContent(data.url);
+          markdown.value = content;
+        }
+      } catch (error) {
+        console.error("Error fetching document:", error);
+      }
+    };
+
+    onMounted(() => {
+      fetchDocument();
+    });
+
     watch(renderedMarkdown, () => {
       nextTick(() => {
         syncScrollInternal("cursor");
@@ -256,6 +302,47 @@ export default {
       }
     };
 
+    const saveDocument = async () => {
+      try {
+        const documentId = route.params.id;
+        const { data } = await documentService.updateDocument(documentId);
+        
+        // Upload content to Minio URL
+        if (data.url) {
+          const response = await fetch(data.url, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'text/markdown',
+            },
+            body: markdown.value
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to upload to Minio');
+          }
+        }
+
+        // Update document metadata if needed
+        // await documentService.updateDocument(documentId, {
+        //   content: markdown.value,
+        // });
+
+        // Show success indication
+        const button = document.querySelector(".save-button");
+        button.classList.add("save-success");
+        setTimeout(() => {
+          button.classList.remove("save-success");
+        }, 2000);
+      } catch (error) {
+        console.error("Error saving document:", error);
+        const button = document.querySelector(".save-button");
+        button.classList.add("save-error");
+        setTimeout(() => {
+          button.classList.remove("save-error");
+        }, 2000);
+      }
+    };
+
     return {
       markdown,
       renderedMarkdown,
@@ -264,11 +351,11 @@ export default {
       handleDrop,
       updateCursor,
       handleScroll,
+      saveDocument,
     };
   },
 };
 </script>
-
 
 <style>
 textarea::-webkit-scrollbar {
@@ -278,5 +365,28 @@ textarea::-webkit-scrollbar {
 textarea::-webkit-scrollbar-thumb {
   background-color: #4b5563;
   border-radius: 6px;
+}
+
+.save-success {
+  background-color: color-mix(in oklab, var(--color-green-600));
+  transform: scale(1.05);
+}
+
+.save-error {
+  background-color: color-mix(in oklab, var(--color-red-600));
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
 }
 </style>

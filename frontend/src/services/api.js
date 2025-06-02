@@ -56,14 +56,6 @@ export const documentService = {
       }
 
       const payload = JSON.parse(atob(token.split(".")[1]));
-      // console.log('Getting documents with payload:', payload);
-      
-      if (payload.global_role === 'admin') {
-        const response = await api.get('/flow/documents/1'); // Use default realm for admin
-        return { data: response.data };
-      }
-
-      // For regular users, fetch by realm
       const realmIds = Object.keys(payload.realm_roles || {});
       if (realmIds.length === 0) {
         console.warn('No realm IDs found in token');
@@ -89,8 +81,17 @@ export const documentService = {
       const allDocuments = results.reduce((acc, result) => {
         if (result.documents) {
           acc.push(...result.documents.map(doc => ({
-            ...doc,
-            realmId: result.realmId
+            id: doc.id,
+            title: doc.title,
+            description: doc.description,
+            status: doc.status,
+            creatorId: doc.creator_id,
+            realmId: result.realmId,
+            currentReviewerId: doc.current_reviewer_id,
+            publishedAt: doc.published_at,
+            createdAt: doc.created_at,
+            updatedAt: doc.updated_at,
+            url: doc.url
           })));
         }
         return acc;
@@ -131,6 +132,15 @@ export const documentService = {
       rejection_reason: rejectionReason,
     });
   },
+
+  getDocumentDetail(id) {
+    return api.get(`/flow/documents/${id}/details`);
+  },
+
+  async getMarkdownContent(url) {
+    const response = await fetch(url);
+    return response.text();
+  }
 };
 
 export const notificationService = {

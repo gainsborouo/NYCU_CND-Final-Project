@@ -89,8 +89,8 @@ services:
     depends_on:
       - minio-api
       - minio
-      # - flow
-      # - auth
+      - flow
+      - auth
     networks:
       - app_network
 networks:

@@ -58,20 +58,20 @@
                   :class="getStatusClass(doc.status)"
                   class="px-2 py-1 rounded-full text-xs whitespace-nowrap"
                 >
-                  {{ doc.status }}
+                  {{ mapStatus(doc.status) }}
                 </span>
               </div>
 
               <p
                 class="text-gray-400 text-sm mb-4 line-clamp-2 h-[2.5rem] overflow-hidden"
               >
-                {{ doc.content }}
+                {{ doc.description }}
               </p>
 
               <div class="flex items-center text-xs text-gray-400 gap-2 mt-2">
-                <span class="text-cyan-500">{{ doc.type }}</span>
+                <span class="text-cyan-500">{{ doc.realmId }}</span>
                 <span>•</span>
-                <span>{{ doc.lastEdited }}</span>
+                <span>{{ doc.updatedAt }}</span>
               </div>
             </div>
 
@@ -80,7 +80,7 @@
             >
               <div class="flex justify-end gap-3 w-full">
                 <!-- Draft actions -->
-                <template v-if="doc.status === 'Draft'">
+                <template v-if="doc.status === 'draft'">
                   <button
                     @click="editDocument(doc.id)"
                     class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
@@ -235,14 +235,25 @@ export default {
       }
     };
 
-    const getStatusClass = (status) => {
-      const classes = {
-        Draft: "bg-gray-600 text-gray-100",
-        "Pending Review": "bg-yellow-600 text-yellow-100",
-        Published: "bg-green-600 text-green-100",
-        Rejected: "bg-red-600 text-red-100",
+    const mapStatus = (status) => {
+      const statusMap = {
+        'draft': 'Draft',
+        'pending_review': 'Pending Review',
+        'published': 'Published',
+        'rejected': 'Rejected'
       };
-      return classes[status] || "bg-gray-600 text-gray-100";
+      return statusMap[status?.toLowerCase()] || status;
+    };
+
+    const getStatusClass = (status) => {
+      const mappedStatus = mapStatus(status);
+      const classes = {
+        'Draft': 'bg-gray-600 text-gray-100',
+        'Pending Review': 'bg-yellow-600 text-yellow-100',
+        'Published': 'bg-green-600 text-green-100',
+        'Rejected': 'bg-red-600 text-red-100',
+      };
+      return classes[mappedStatus] || 'bg-gray-600 text-gray-100';
     };
 
     const fetchDocuments = async () => {
@@ -335,12 +346,12 @@ export default {
       }
     });
 
-    // Make sure to return userGroups in the return statement
     return {
       isLoggedIn,
       isReviewer,
       documents,
       getStatusClass,
+      mapStatus,
       submitForReview,
       editDocument,
       reviewDocument,
@@ -349,7 +360,7 @@ export default {
       showCreateModal,
       newDocument,
       createDocument,
-      userGroups, // Add this line
+      userGroups,
     };
   },
 };
