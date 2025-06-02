@@ -1,48 +1,119 @@
 <template>
   <div
-    class="flex h-[calc(100vh-3.5rem)] bg-gray-900 text-gray-100 font-sans relative"
+    class="h-[calc(100vh-3.5rem)] bg-gray-900 text-gray-100 font-sans relative flex flex-col"
   >
-    <!-- Markdown Editor -->
+    <!-- Document Header -->
+    <div class="border-b border-gray-700 bg-gray-800 p-4">
+      <div class="max-w-4xl mx-auto">
+        <div class="flex justify-between items-center">
+          <h1
+            class="text-2xl font-bold cursor-pointer"
+            @click="showEditModal = true"
+          >
+            {{ documentTitle || "Untitled Document" }}
+          </h1>
+          <div class="flex items-center gap-3 text-sm text-gray-400">
+            <span class="text-cyan-500">{{ documentAuthor }}</span>
+            <span>•</span>
+            <span>Last modified: {{ lastModifiedDate }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Modal -->
     <div
-      class="w-1/2 border-r border-gray-700 flex bg-gray-800"
-      @drop.prevent="handleDrop"
-      @dragover.prevent
+      v-if="showEditModal"
+      class="fixed inset-0 bg-gray-950/90 flex items-center justify-center p-4 z-50"
     >
-      <div class="flex-1 p-6">
-        <textarea
-          v-model="markdown"
-          ref="textareaRef"
-          @click="updateCursor"
-          @keyup="updateCursor"
-          @scroll="handleScroll"
-          @input="updateCursor"
-          @mouseup="updateCursor"
-          class="w-full h-full p-4 font-mono text-sm border border-gray-700 rounded-lg resize-none focus:outline-none bg-gray-900 text-gray-100"
-          placeholder="Write your markdown here..."
-        ></textarea>
+      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+        <h3 class="text-xl font-semibold mb-4">Edit Document Details</h3>
+        <form @submit.prevent="saveMetadata">
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Title</label>
+            <input
+              v-model="editingTitle"
+              type="text"
+              class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+              required
+            />
+          </div>
+          <div class="mb-6">
+            <label class="block text-sm font-medium mb-2">Description</label>
+            <textarea
+              v-model="editingDescription"
+              class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+              rows="3"
+            ></textarea>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              @click="showEditModal = false"
+              class="px-4 py-2 text-gray-300 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+            >
+              Save
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 
-    <!-- Rendered Output -->
-    <div class="w-1/2 p-6 overflow-auto bg-gray-950" ref="previewRef">
-      <div class="prose prose-invert max-w-none text-base leading-relaxed">
-        <div v-html="renderedMarkdown"></div>
-      </div>
-    </div>
-
-    <!-- Floating Save Button -->
-    <div class="fixed bottom-6 right-6">
-      <button
-        @click="saveDocument"
-        class="px-4 py-2 bg-cyan-700/40 hover:bg-cyan-600/60 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2 hover:scale-105 save-button"
+    <!-- Editor Container -->
+    <div class="flex flex-1 overflow-hidden">
+      <!-- Markdown Editor -->
+      <div
+        class="w-1/2 border-r border-gray-700 flex bg-gray-800"
+        @drop.prevent="handleDrop"
+        @dragover.prevent
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 448 512" fill="currentColor">
-          <path
-            d="M48 96l0 320c0 8.8 7.2 16 16 16l320 0c8.8 0 16-7.2 16-16l0-245.5c0-4.2-1.7-8.3-4.7-11.3l33.9-33.9c12 12 18.7 28.3 18.7 45.3L448 416c0 35.3-28.7 64-64 64L64 480c-35.3 0-64-28.7-64-64L0 96C0 60.7 28.7 32 64 32l245.5 0c17 0 33.3 6.7 45.3 18.7l74.5 74.5-33.9 33.9L320.8 84.7c-.3-.3-.5-.5-.8-.8L320 184c0 13.3-10.7 24-24 24l-192 0c-13.3 0-24-10.7-24-24L80 80 64 80c-8.8 0-16 7.2-16 16zm80-16l0 80 144 0 0-80L128 80zm32 240a64 64 0 1 1 128 0 64 64 0 1 1 -128 0z"
-          />
-        </svg>
-        Save
-      </button>
+        <div class="flex-1 p-6">
+          <textarea
+            v-model="markdown"
+            ref="textareaRef"
+            @click="updateCursor"
+            @keyup="updateCursor"
+            @scroll="handleScroll"
+            @input="updateCursor"
+            @mouseup="updateCursor"
+            class="w-full h-full p-4 font-mono text-sm border border-gray-700 rounded-lg resize-none focus:outline-none bg-gray-900 text-gray-100"
+            placeholder="Write your markdown here..."
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Rendered Output -->
+      <div class="w-1/2 p-6 overflow-auto bg-gray-950" ref="previewRef">
+        <div class="prose prose-invert max-w-none text-base leading-relaxed">
+          <div v-html="renderedMarkdown"></div>
+        </div>
+      </div>
+
+      <!-- Floating Save Button -->
+      <div class="fixed bottom-6 right-6">
+        <button
+          @click="saveDocument"
+          class="px-4 py-2 bg-cyan-700/40 hover:bg-cyan-600/60 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2 hover:scale-105 save-button"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            viewBox="0 0 448 512"
+            fill="currentColor"
+          >
+            <path
+              d="M48 96l0 320c0 8.8 7.2 16 16 16l320 0c8.8 0 16-7.2 16-16l0-245.5c0-4.2-1.7-8.3-4.7-11.3l33.9-33.9c12 12 18.7 28.3 18.7 45.3L448 416c0 35.3-28.7 64-64 64L64 480c-35.3 0-64-28.7-64-64L0 96C0 60.7 28.7 32 64 32l245.5 0c17 0 33.3 6.7 45.3 18.7l74.5 74.5-33.9 33.9L320.8 84.7c-.3-.3-.5-.5-.8-.8L320 184c0 13.3-10.7 24-24 24l-192 0c-13.3 0-24-10.7-24-24L80 80 64 80c-8.8 0-16 7.2-16 16zm80-16l0 80 144 0 0-80L128 80zm32 240a64 64 0 1 1 128 0 64 64 0 1 1 -128 0z"
+            />
+          </svg>
+          Save
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -110,17 +181,18 @@ export default {
   name: "MarkdownEditor",
   setup() {
     const route = useRoute();
-    // const markdown = ref(
-    //   `# Welcome\n\n### 使用組件\n\n在主應用組件中使用 Greeting 組件：\n\n\`\`\`jsx\n// src/App.jsx\nimport React from "react";\nimport Greeting from "./components/Greeting";\n\nfunction App() {\n  return (\n    <div className="App">\n      <Greeting name="Alice" />\n      <Greeting name="Bob" />\n    </div>\n  );\n}\n\`\`\``
-    // );
-    const markdown = ref(``);
-
     const textareaRef = ref(null);
     const previewRef = ref(null);
     const cursorPosition = ref(0);
     const isScrolling = ref(false);
-    const scrollTimeout = ref(null);
-    const lastScrollTop = ref(0);
+    const documentTitle = ref("");
+    const documentDescription = ref("");
+    const documentAuthor = ref("");
+    const lastModifiedDate = ref("");
+    const markdown = ref("");
+    const showEditModal = ref(false);
+    const editingTitle = ref("");
+    const editingDescription = ref("");
 
     const renderedMarkdown = computed(() => {
       return DOMPurify.sanitize(md.render(markdown.value));
@@ -263,12 +335,53 @@ export default {
       cursorPosition.value = newPos;
     };
 
+    const saveMetadata = async () => {
+      try {
+        documentTitle.value = editingTitle.value;
+        documentDescription.value = editingDescription.value;
+        await handleMetadataChange();
+        showEditModal.value = false;
+      } catch (error) {
+        console.error("Error saving metadata:", error);
+      }
+    };
+
     const fetchDocument = async () => {
       try {
         const documentId = route.params.id;
         const { data } = await documentService.getDocumentDetail(documentId);
 
-        // console.log("Fetched document data:", data);
+        documentTitle.value = data.title || "";
+        documentDescription.value = data.description || "";
+        editingTitle.value = data.title || "";
+        editingDescription.value = data.description || "";
+
+        // Format the date properly
+        // const formatDate = (dateString) => {
+        //   if (!dateString) return "Not available";
+        //   const date = new Date(dateString);
+        //   return date.toLocaleDateString("en-US", {
+        //     year: "numeric",
+        //     month: "short",
+        //     day: "numeric",
+        //     hour: "2-digit",
+        //     minute: "2-digit",
+        //   });
+        // };
+
+        const formatDate = (dateString) => {
+          if (!dateString) return "Not available";
+          const date = new Date(dateString);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          return `${year}/${month}/${day}`;
+        };
+
+        documentAuthor.value = data.creator_id
+          ? `User ${data.creator_id}`
+          : "Unknown";
+        lastModifiedDate.value = formatDate(data.updated_at);
 
         if (data.url) {
           const content = await documentService.getMarkdownContent(data.url);
@@ -341,12 +454,21 @@ export default {
     return {
       markdown,
       renderedMarkdown,
-      textareaRef,
-      previewRef,
+      textareaRef, // Added to return
+      previewRef, // Added to return
+      cursorPosition, // Added to return
       handleDrop,
       updateCursor,
       handleScroll,
       saveDocument,
+      showEditModal,
+      editingTitle,
+      editingDescription,
+      saveMetadata,
+      documentTitle,
+      documentDescription,
+      documentAuthor,
+      lastModifiedDate,
     };
   },
 };

@@ -69,7 +69,7 @@
               </p>
 
               <div class="flex items-center text-xs text-gray-400 gap-2 mt-2">
-                <span class="text-cyan-500">{{ doc.realmId }}</span>
+                <span class="text-cyan-500">{{ doc.creatorId }}</span>
                 <span>•</span>
                 <span>Last edited {{ formatDate(doc.updatedAt) }}</span>
               </div>
@@ -215,7 +215,7 @@ export default {
     const newDocument = ref({
       title: "",
       description: "",
-      realmId: "",
+      creatorId: "",
     });
 
     const getUserGroups = () => {
@@ -322,7 +322,7 @@ export default {
         const response = await documentService.createDocument({
           title: newDocument.value.title,
           description: newDocument.value.description,
-          realmId: newDocument.value.realmId,
+          creatorId: newDocument.value.creatorId,
         });
 
         showCreateModal.value = false;
