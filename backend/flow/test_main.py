@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, Session, create_engine
 from main import app, get_session
 from models import DocumentStatus, UserRoles, DocumentCreate
-
+# import minio
 # --- Test Database Setup ---
 TEST_DATABASE_URL = "sqlite:///./test.db"
 test_engine = create_engine(TEST_DATABASE_URL, echo=False)
@@ -19,10 +19,16 @@ def session_fixture():
 def client_fixture(session: Session):
     def get_session_override():
         return session
+    def get_s3_url_from_id_override(document_id: int,filename: str) -> str:
+    # This is a dummy URL for demonstration purposes
+        return f"https://your-s3-bucket.amazonaws.com/documents/{document_id}/{filename}"
+
     # Override the get_session dependency to use the test session
     app.dependency_overrides[get_session] = get_session_override
+
     yield TestClient(app)
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def mock_user_context():

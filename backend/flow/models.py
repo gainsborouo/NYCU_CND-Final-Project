@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from sqlmodel import Field, SQLModel
 from pydantic import BaseModel, Field as PydanticField, computed_field # Use alias for Pydantic's Field to avoid conflict with SQLModel's Field
-
+import asyncio
 
 # Placeholder for external S3 URL generation
-from minio import get_read_s3_url,get_upload_s3_url
+from minio import get_read_s3_url,get_upload_s3_url, get_s3_url_from_id
 # def get_s3_url_from_id(document_id: int) -> str:
 #     """
 #     Placeholder for a function that generates a document URL (e.g., S3 pre-signed URL).
