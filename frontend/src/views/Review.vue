@@ -12,35 +12,54 @@
       </div>
 
       <!-- Review Panel -->
-      <div class="p-6 bg-gray-900 overflow-y-auto h-full">
+      <div class="p-6 bg-gray-800 overflow-y-auto h-full">
         <div class="max-w-2xl mx-auto">
+          <!-- Document Header -->
+          <div class="flex justify-between items-start mb-8">
+            <div>
+              <h1 class="text-2xl font-bold mb-2">{{ document.title }}</h1>
+              <div class="flex items-center gap-3 text-sm text-gray-400">
+                <span class="text-cyan-500">{{ authorUsername }}</span>
+                <span>•</span>
+                <span>Last edited {{ lastModifiedDate }}</span>
+              </div>
+            </div>
+            <span
+              :class="getStatusClass(document.status)"
+              class="px-3 py-1 rounded-full text-xs"
+            >
+              {{ mapStatus(document.status) }}
+            </span>
+          </div>
+
           <h2 class="text-xl font-bold mb-6">Review</h2>
 
           <!-- Review Form -->
           <div class="space-y-6">
+            <!-- Decision Buttons -->
             <div>
               <label class="block text-sm font-medium text-gray-300 mb-2">
                 Decision
               </label>
               <div class="flex gap-4">
                 <button
-                  @click="decision = 'approve'"
+                  @click="toggleDecision('approve')"
                   :class="[
-                    'px-4 py-2 rounded-lg font-medium',
+                    'px-4 py-2 rounded-lg font-medium transition-colors duration-200',
                     decision === 'approve'
-                      ? 'bg-green-600 text-white'
-                      : 'border border-gray-600 text-gray-400',
+                      ? 'bg-green-600 text-white hover:bg-green-500'
+                      : 'border border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300',
                   ]"
                 >
                   Approve
                 </button>
                 <button
-                  @click="decision = 'reject'"
+                  @click="toggleDecision('reject')"
                   :class="[
-                    'px-4 py-2 rounded-lg font-medium',
+                    'px-4 py-2 rounded-lg font-medium transition-colors duration-200',
                     decision === 'reject'
-                      ? 'bg-red-600 text-white'
-                      : 'border border-gray-600 text-gray-400',
+                      ? 'bg-red-600 text-white hover:bg-red-500'
+                      : 'border border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300',
                   ]"
                 >
                   Reject
@@ -48,25 +67,33 @@
               </div>
             </div>
 
-            <div>
+            <!-- Comments - Only show when reject is selected -->
+            <div v-if="decision === 'reject'">
               <label class="block text-sm font-medium text-gray-300 mb-2">
-                Comments
+                Rejection Reason <span class="text-red-500">*</span>
               </label>
               <textarea
                 v-model="comments"
                 rows="4"
-                class="w-full px-3 py-2 bg-gray-800 text-gray-100 rounded-lg border border-gray-700"
-                placeholder="Add your review comments here..."
+                class="w-full px-3 py-2 bg-gray-800 text-gray-100 rounded-lg border border-gray-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                placeholder="Please provide a reason for rejection..."
+                required
               ></textarea>
             </div>
 
+            <!-- Submit Button -->
             <button
               @click="submitReview"
-              :disabled="!decision || (decision === 'reject' && !comments)"
+              :disabled="!isValid"
               class="w-full bg-cyan-700 text-white py-2 rounded-lg hover:bg-cyan-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Submit Review
             </button>
+
+            <!-- Error Message -->
+            <!-- <div v-if="error" class="text-red-500 text-sm text-center">
+              {{ error }}
+            </div> -->
           </div>
         </div>
       </div>
@@ -75,12 +102,13 @@
 </template>
 
 <script>
-import { ref, computed } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import DOMPurify from "dompurify";
+import { documentService, authService } from "../services/api";
 
 const md = new MarkdownIt({
   html: true,
@@ -113,63 +141,152 @@ export default {
   name: "DocumentReview",
   setup() {
     const route = useRoute();
+    const router = useRouter();
     const document = ref({
       id: route.params.id,
-      title: "Safety Guidelines Update 2024",
-      type: "Policy",
-      author: "John Doe",
-      lastEdited: "2024-05-28",
-      status: "Pending Review",
-      content: `# Safety Guidelines 2024
-
-## Overview
-This document outlines updated safety procedures for all laboratory operations.
-
-## Key Changes
-1. **Personal Protective Equipment**
-   - Safety goggles must be worn at all times
-   - Lab coats required for all chemical handling
-
-2. **Emergency Procedures**
-   - Updated evacuation routes
-   - New emergency contact numbers
-
-### Code Implementation
-\`\`\`python
-def check_safety_compliance(area_id):
-    required_equipment = get_required_equipment(area_id)
-    current_equipment = scan_current_equipment(area_id)
-    
-    return all(item in current_equipment for item in required_equipment)
-\`\`\`
-
-## Review Notes
-- Implementation timeline
-- Staff training requirements
-- Budget considerations`,
+      title: "",
+      description: "",
+      status: "",
+      content: "",
+      creator_id: null,
+      updated_at: null
     });
-
+    const authorUsername = ref("");
     const decision = ref("");
     const comments = ref("");
+    const error = ref(null);
+
     const renderedContent = computed(() => {
-      return DOMPurify.sanitize(md.render(document.value.content));
+      return DOMPurify.sanitize(md.render(document.value.content || ""));
+    });
+
+    const fetchDocument = async () => {
+      try {
+        const documentId = route.params.id;
+        const { data } = await documentService.getDocumentDetail(documentId);
+
+        document.value = {
+          ...document.value,
+          title: data.title || "",
+          description: data.description || "",
+          status: data.status || "",
+          creator_id: data.creator_id,
+          updated_at: data.updated_at
+        };
+
+        // Fetch author username
+        if (data.creator_id) {
+          try {
+            const username = await authService.getUserUsername(data.creator_id);
+            authorUsername.value = username;
+          } catch (error) {
+            console.error("Error fetching username:", error);
+            authorUsername.value = data.creator_id;
+          }
+        }
+
+        // Fetch markdown content
+        if (data.url) {
+          const content = await documentService.getMarkdownContent(data.url);
+          document.value.content = content;
+        }
+
+        // Verify document is in review state
+        if (data.status !== 'pending_review') {
+          router.push('/');
+        }
+      } catch (error) {
+        console.error("Error fetching document:", error);
+        error.value = "Failed to load document";
+      }
+    };
+
+    const isValid = computed(() => {
+      if (!decision.value) return false;
+      if (decision.value === 'reject' && !comments.value.trim()) return false;
+      return true;
     });
 
     const submitReview = async () => {
-      console.log("Submitting review:", {
-        documentId: document.value.id,
-        decision: decision.value,
-        comments: comments.value,
-      });
-      // TODO: Implement actual API call
+      if (!isValid.value) return;
+
+      try {
+        const reviewData = {
+          action: decision.value.toLowerCase(), // ensure lowercase
+          rejection_reason: decision.value === 'reject' ? comments.value : null // use null instead of empty string
+        };
+
+        await documentService.reviewDocument(
+          document.value.id,
+          reviewData.action,
+          reviewData.rejection_reason
+        );
+
+        // Show success message or redirect
+        router.push('/');
+      } catch (err) {
+        console.error("Error submitting review:", err);
+        error.value = "Failed to submit review. Please try again.";
+      }
     };
+
+    const toggleDecision = (value) => {
+      if (decision.value === value) {
+        decision.value = '';
+      } else {
+        decision.value = value;
+      }
+    };
+
+    const mapStatus = (status) => {
+      const statusMap = {
+        draft: "Draft",
+        pending_review: "Pending Review",
+        published: "Published",
+        rejected: "Rejected",
+      };
+      return statusMap[status?.toLowerCase()] || status;
+    };
+
+    const getStatusClass = (status) => {
+      const classes = {
+        draft: "bg-gray-600 text-white",
+        pending_review: "bg-yellow-600 text-white",
+        published: "bg-green-600 text-white",
+        rejected: "bg-red-600 text-white",
+      };
+      return classes[status?.toLowerCase()] || "bg-gray-600 text-white";
+    };
+
+    const formatDate = (dateString) => {
+      if (!dateString) return "Not available";
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}/${month}/${day}`;
+    };
+
+    // Add computed property for formatted date
+    const lastModifiedDate = computed(() => formatDate(document.value.updated_at));
+
+    onMounted(() => {
+      fetchDocument();
+    });
 
     return {
       document,
+      authorUsername,
       decision,
       comments,
       renderedContent,
       submitReview,
+      error,
+      toggleDecision,
+      mapStatus,
+      getStatusClass,
+      lastModifiedDate,
+      isValid,
     };
   },
 };

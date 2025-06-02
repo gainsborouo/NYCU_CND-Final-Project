@@ -28,18 +28,18 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', {
+    console.error("API Error:", {
       status: error.response?.status,
       url: error.config?.url,
       method: error.config?.method,
-      headers: error.config?.headers
+      headers: error.config?.headers,
     });
 
     if (error.response?.status === 401) {
       // Only redirect if not already on login page
-      if (!window.location.pathname.includes('/login')) {
-        localStorage.removeItem('jwtToken');
-        window.location.href = '/login';
+      if (!window.location.pathname.includes("/login")) {
+        localStorage.removeItem("jwtToken");
+        window.location.href = "/login";
       }
     }
     return Promise.reject(error);
@@ -166,7 +166,7 @@ export const documentService = {
   },
 
   reviewDocument(id, action, rejectionReason = null) {
-    return api.post(`/flow/documents/${id}/review`, {
+    return api.post(`/flow/documents/${id}/review-action`, {
       action,
       rejection_reason: rejectionReason,
     });
@@ -179,19 +179,26 @@ export const documentService = {
   async getMarkdownContent(url) {
     const response = await fetch(url);
     return response.text();
-  }
+  },
 };
 
 export const authService = {
   getGroupNames() {
-    return api.get('/auth/admin/groups/names')
+    return api.get("/auth/admin/groups/names");
   },
-  
+
   getUserUsername(userId) {
-    return api.get(`/auth/admin/users/${userId}/username`)
-      .then(response => response.data.username)
-  }
-}
+    return api
+      .get(`/auth/admin/users/${userId}/username`)
+      .then((response) => response.data.username);
+  },
+
+  getGroupReviewers(groupId) {
+    return api
+      .get(`/auth/admin/groups/${groupId}/reviewers`)
+      .then((response) => response.data);
+  },
+};
 
 export const notificationService = {
   getNotifications() {

@@ -97,34 +97,61 @@
                   </button>
                 </template>
 
-                <!-- Pending Review actions -->
-                <template v-if="doc.status === 'Pending Review'">
+                <template v-if="doc.status === 'rejected'">
+                  <!-- <button
+                    @click="editDocument(doc.id)"
+                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                  >
+                    Edit
+                  </button>
                   <button
-                    v-if="isReviewer"
+                    @click="submitForReview(doc.id)"
+                    class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
+                  >
+                    Submit for Review
+                  </button> -->
+                  <button
+                    @click="viewDocument(doc.id)"
+                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                  >
+                    View
+                  </button>
+                </template>
+
+                <!-- Pending Review actions -->
+                <template v-if="doc.status === 'pending_review'">
+                  <button
+                    @click="viewDocument(doc.id)"
+                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                  >
+                    View
+                  </button>
+                  <button
+                    v-if="doc.currentReviewerId === getCurrentUserId()"
                     @click="reviewDocument(doc.id)"
                     class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
                   >
                     Review
                   </button>
-                  <span v-else class="text-xs text-gray-400">
+                  <!-- <span v-else-if="doc.creatorId === getCurrentUserId()" class="text-xs text-gray-400">
                     Waiting for review...
-                  </span>
+                  </span> -->
                 </template>
 
                 <!-- Published actions -->
-                <template v-if="doc.status === 'Published'">
+                <template v-if="doc.status === 'published'">
                   <button
                     @click="viewDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
+                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
                   >
                     View
                   </button>
-                  <button
+                  <!-- <button
                     @click="createNewVersion(doc.id)"
                     class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
                   >
                     New Version
-                  </button>
+                  </button> -->
                 </template>
               </div>
             </div>
@@ -144,8 +171,13 @@
             v-if="showCreateModal"
             class="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <div class="fixed inset-0 bg-gray-950/90 backdrop-blur-sm" @click="showCreateModal = false"></div>
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md relative z-10">
+            <div
+              class="fixed inset-0 bg-gray-950/90 backdrop-blur-sm"
+              @click="showCreateModal = false"
+            ></div>
+            <div
+              class="bg-gray-800 rounded-lg p-6 w-full max-w-md relative z-10"
+            >
               <h3 class="text-xl font-semibold mb-4">Create New Document</h3>
               <form @submit.prevent="createDocument">
                 <div class="mb-4">
@@ -203,6 +235,14 @@
             </div>
           </div>
         </Transition>
+
+        <SubmitForReviewModal
+          :show="showSubmitModal"
+          :document-id="selectedDocumentId"
+          :group-id="selectedGroupId"
+          @close="showSubmitModal = false"
+          @submitted="handleReviewSubmitted"
+        />
       </div>
     </div>
   </div>
@@ -213,9 +253,13 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { documentService, authService } from "../services/api";
 import { authStore } from "../store/auth";
+import SubmitForReviewModal from "../components/SubmitForReviewModal.vue";
 
 export default {
   name: "Home",
+  components: {
+    SubmitForReviewModal,
+  },
   setup() {
     const router = useRouter();
     const route = useRoute();
@@ -223,6 +267,9 @@ export default {
     const isLoggedIn = computed(() => authStore.token);
     const isReviewer = ref(true);
     const showCreateModal = ref(false);
+    const showSubmitModal = ref(false);
+    const selectedDocumentId = ref(null);
+    const selectedGroupId = ref(null);
     const userGroups = ref([]);
     const newDocument = ref({
       title: "",
@@ -285,13 +332,12 @@ export default {
     };
 
     const submitForReview = async (docId) => {
-      try {
-        const reviewerId = "some-reviewer-id";
-        await documentService.submitForReview(docId, reviewerId);
-        await fetchDocuments();
-      } catch (error) {
-        console.error("Error submitting for review:", error);
-      }
+      const doc = documents.value.find((d) => d.id === docId);
+      if (!doc) return;
+
+      selectedDocumentId.value = docId;
+      selectedGroupId.value = doc.realmId;
+      showSubmitModal.value = true;
     };
 
     const editDocument = (docId) => {
@@ -358,6 +404,11 @@ export default {
       }
     };
 
+    const handleReviewSubmitted = async () => {
+      await fetchDocuments();
+      // Optional: Show success message
+    };
+
     const formatDate = (dateString) => {
       if (!dateString) return "";
       const date = new Date(dateString);
@@ -397,6 +448,18 @@ export default {
       }
     };
 
+    const getCurrentUserId = () => {
+      try {
+        const token = authStore.token;
+        if (!token) return null;
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        return payload.uid;
+      } catch (error) {
+        console.error("Error getting current user ID:", error);
+        return null;
+      }
+    };
+
     return {
       isLoggedIn,
       isReviewer,
@@ -416,6 +479,11 @@ export default {
       formatDate,
       groupNames,
       fetchUsername,
+      showSubmitModal,
+      selectedDocumentId,
+      selectedGroupId,
+      handleReviewSubmitted,
+      getCurrentUserId,
     };
   },
 };

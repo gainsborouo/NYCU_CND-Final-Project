@@ -6,16 +6,16 @@
         <div>
           <h1 class="text-3xl font-bold mb-2">{{ document.title }}</h1>
           <div class="flex items-center gap-3 text-sm text-gray-400 py-2">
-            <span class="text-cyan-500">{{ document.type }}</span>
+            <span class="text-cyan-500">{{ authorUsername }}</span>
             <span>•</span>
-            <span>Last edited {{ document.lastEdited }}</span>
+            <span>Last edited {{ lastModifiedDate }}</span>
           </div>
         </div>
         <span
           :class="getStatusClass(document.status)"
           class="px-3 py-1 rounded-full text-xs"
         >
-          {{ document.status }}
+          {{ mapStatus(document.status) }}
         </span>
       </div>
 
@@ -28,12 +28,13 @@
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import DOMPurify from "dompurify";
+import { documentService, authService } from "../services/api";
 
 const md = new MarkdownIt({
   html: true,
@@ -91,55 +92,93 @@ export default {
     const route = useRoute();
     const document = ref({
       id: route.params.id,
-      title: "Manufacturing Process Documentation",
-      lastEdited: "2024-05-29",
+      title: "",
+      description: "",
       type: "Markdown",
-      status: "Published",
-      content: `# Manufacturing Process Overview
-
-## Introduction
-This document outlines the standard operating procedures for our manufacturing process.
-
-## Steps
-1. **Material Preparation**
-   - Check raw materials quality
-   - Prepare workstation
-   
-2. **Assembly Process**
-   - Follow assembly sequence
-   - Perform quality checks
-
-### Code Example
-\`\`\`javascript
-function checkQuality(item) {
-  return item.quality >= standardLevel;
-}
-\`\`\`
-`,
+      status: "",
+      content: "",
+      creator_id: null,
+      updated_at: null,
     });
-
     const renderedContent = ref("");
+    const authorUsername = ref("");
 
-    onMounted(() => {
-      renderedContent.value = DOMPurify.sanitize(
-        md.render(document.value.content)
-      );
-    });
+    const formatDate = (dateString) => {
+      if (!dateString) return "Not available";
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}/${month}/${day}`;
+    };
+
+    const fetchDocument = async () => {
+      try {
+        const documentId = route.params.id;
+        const { data } = await documentService.getDocumentDetail(documentId);
+
+        document.value = {
+          ...document.value,
+          title: data.title || "",
+          description: data.description || "",
+          status: data.status || "Draft",
+          creator_id: data.creator_id,
+          updated_at: data.updated_at,
+        };
+
+        // Fetch author username
+        if (data.creator_id) {
+          try {
+            const username = await authService.getUserUsername(data.creator_id);
+            authorUsername.value = username;
+          } catch (error) {
+            console.error("Error fetching username:", error);
+            authorUsername.value = data.creator_id;
+          }
+        }
+
+        // Fetch markdown content
+        if (data.url) {
+          const content = await documentService.getMarkdownContent(data.url);
+          document.value.content = content;
+          renderedContent.value = DOMPurify.sanitize(md.render(content));
+        }
+      } catch (error) {
+        console.error("Error fetching document:", error);
+      }
+    };
+
+    const mapStatus = (status) => {
+      const statusMap = {
+        draft: "Draft",
+        pending_review: "Pending Review",
+        published: "Published",
+        rejected: "Rejected",
+      };
+      return statusMap[status?.toLowerCase()] || status;
+    };
 
     const getStatusClass = (status) => {
       const classes = {
-        Draft: "bg-gray-600 text-white",
-        "Pending Review": "bg-yellow-600 text-white",
-        Published: "bg-green-600 text-white",
-        Rejected: "bg-red-600 text-white",
+        draft: "bg-gray-600 text-white",
+        pending_review: "bg-yellow-600 text-white",
+        published: "bg-green-600 text-white",
+        rejected: "bg-red-600 text-white",
       };
-      return classes[status] || "bg-gray-600 text-white";
+      return classes[status?.toLowerCase()] || "bg-gray-600 text-white";
     };
+
+    onMounted(() => {
+      fetchDocument();
+    });
 
     return {
       document,
       renderedContent,
       getStatusClass,
+      mapStatus,
+      authorUsername,
+      lastModifiedDate: computed(() => formatDate(document.value.updated_at)),
     };
   },
 };
