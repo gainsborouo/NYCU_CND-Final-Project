@@ -19,10 +19,6 @@ api.interceptors.request.use((config) => {
     
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
-      console.log('Request with token:', {
-        headers: config.headers,
-        payload: payload
-      });
     } catch (error) {
       console.error('Error parsing JWT:', error);
     }
@@ -60,9 +56,8 @@ export const documentService = {
       }
 
       const payload = JSON.parse(atob(token.split(".")[1]));
-      console.log('Getting documents with payload:', payload);
+      // console.log('Getting documents with payload:', payload);
       
-      // For admin users, fetch all documents
       if (payload.global_role === 'admin') {
         const response = await api.get('/flow/documents/1'); // Use default realm for admin
         return { data: response.data };

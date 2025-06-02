@@ -256,7 +256,7 @@ export default {
 
     const submitForReview = async (docId) => {
       try {
-        const reviewerId = "some-reviewer-id"; // Replace with actual reviewer ID logic
+        const reviewerId = "some-reviewer-id";
         await documentService.submitForReview(docId, reviewerId);
         await fetchDocuments();
       } catch (error) {
@@ -308,7 +308,8 @@ export default {
       try {
         const response = await documentService.createDocument({
           title: newDocument.value.title,
-          description: newDocument.value.description
+          description: newDocument.value.description,
+          realmId: newDocument.value.realmId
         });
         
         showCreateModal.value = false;
