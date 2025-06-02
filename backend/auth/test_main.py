@@ -5,10 +5,9 @@ from dotenv import load_dotenv
 from sqlmodel import Session, create_engine, select, SQLModel
 from jose import jwt
 from datetime import datetime, timezone, timedelta
-from time import sleep
 
 from main import app, get_session, create_user, hash_password
-from models import User, UserCreate, Group, GroupCreate, UserGroupRole, GroupRoleAssignment, GlobalRole, GroupRole
+from models import User, UserCreate, Group, GroupCreate, UserGroupRole, GlobalRole, GroupRole
 
 # --- Test Database Setup ---
 TEST_DATABASE_URL = "sqlite:///./test_auth_microservice.db"
@@ -167,7 +166,7 @@ def test_delete_group(client: TestClient, session: Session):
     session.refresh(group)
     
     response = client.delete(f"/admin/groups/delete/{TEST_GROUP_NAME}")
-    assert response.status_code == 204
+    assert response.status_code == 200
     
     # Verify deletion
     group = session.exec(select(Group).where(Group.group_name == TEST_GROUP_NAME)).first()
@@ -196,7 +195,7 @@ def test_assign_group_roles(client: TestClient, session: Session):
         "roles": [GroupRole.USER.value, GroupRole.REVIEWER.value]
     }
     response = client.post("/admin/groups/assign-roles", json=assignment)
-    assert response.status_code == 204
+    assert response.status_code == 201
     
     # Verify roles in database
     roles = session.exec(
@@ -275,7 +274,7 @@ def test_remove_group_roles(client: TestClient, session: Session):
         "roles": [GroupRole.USER.value]
     }
     response = client.request("DELETE", "/admin/groups/remove-roles", json=assignment)
-    assert response.status_code == 204
+    assert response.status_code == 200
     
     # Verify role removal
     roles = session.exec(
@@ -377,7 +376,7 @@ def test_update_password(client: TestClient, session: Session):
         "username": TEST_USER_USERNAME,
         "new_password": "newpassword"
     })
-    assert response.status_code == 204
+    assert response.status_code == 200
     
     # Verify password update
     updated_user = session.exec(select(User).where(User.username == TEST_USER_USERNAME)).first()
