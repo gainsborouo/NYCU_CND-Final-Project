@@ -10,8 +10,10 @@ import os
 
 app = FastAPI()
 
+EXTERNAL_ENDPOINT = os.getenv("EXTERNAL_ENDPOINT", "http://localhost:8080/minio")
+
 # MinIO configuration from environment variables
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "admin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "admin1234")
 MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
@@ -61,6 +63,13 @@ async def generate_upload_url(uid: str, request: UploadUrlRequest):
             BUCKET_NAME,
             object_name,
             expires=timedelta(seconds=3600)  # 1-hour expiry
+        )
+
+        # Replace the MinIO endpoint with the external endpoint for client use
+        presigned_url = presigned_url.replace(
+            f"http://{MINIO_ENDPOINT}",
+            f"{EXTERNAL_ENDPOINT}",
+            1  # Replace only the first occurrence
         )
 
         return JSONResponse(
@@ -136,6 +145,12 @@ async def generate_read_url(uid: str, filename: str):
             BUCKET_NAME,
             object_name,
             expires=timedelta(seconds=3600)  # 1-hour expiry
+        )
+
+        presigned_url = presigned_url.replace(
+            f"http://{MINIO_ENDPOINT}",
+            f"{EXTERNAL_ENDPOINT}",
+            1  # Replace only the first occurrence
         )
 
         return JSONResponse(
