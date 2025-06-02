@@ -673,7 +673,7 @@ def get_document_review_history(
     # 5. Return the list of review records
     return review_records
 
-@app.get("/notifications/", response_model=List[NotificationRead])
+@app.get("/notifications", response_model=List[NotificationRead])
 def get_user_notifications(
     session: Session = Depends(get_session),
     user_context: UserRoles = Depends(get_current_user_context),

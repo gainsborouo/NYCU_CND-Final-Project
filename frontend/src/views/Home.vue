@@ -21,8 +21,51 @@
     <!-- Logged In View -->
     <div v-else class="w-full p-6 overflow-auto">
       <div class="max-w-6xl mx-auto">
+        <!-- Add search and filter section -->
+        <div class="mb-8 space-y-4 pt-2">
+          <!-- Search bar -->
+          <div class="relative">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search documents..."
+              class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none pl-10"
+            />
+            <svg
+              class="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+
+          <!-- Status filters -->
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="status in statusFilters"
+              :key="status.value"
+              @click="toggleStatusFilter(status.value)"
+              :class="[
+                'px-3 py-1.5 rounded-full text-sm transition-colors duration-200',
+                selectedStatuses.includes(status.value)
+                  ? status.activeClass
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              ]"
+            >
+              {{ status.label }}
+            </button>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center mb-8">
-          <h2 class="text-2xl font-bold text-gray-100">Your Documents</h2>
+          <h2 class="text-2xl font-bold text-gray-100">Documents</h2>
           <button
             @click="showCreateModal = true"
             class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600 transition-colors duration-300 flex items-center gap-2"
@@ -43,9 +86,10 @@
           </button>
         </div>
 
+        <!-- Document grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           <div
-            v-for="doc in documents"
+            v-for="doc in filteredDocuments"
             :key="doc.id"
             class="flex flex-col bg-gray-800 rounded-lg overflow-hidden border border-gray-700"
           >
@@ -73,7 +117,7 @@
                   usernames[doc.creatorId] || doc.creatorId
                 }}</span>
                 <span>•</span>
-                <span>Last edited {{ formatDate(doc.updatedAt) }}</span>
+                <span>Last updated {{ formatDate(doc.updatedAt) }}</span>
               </div>
             </div>
 
@@ -251,7 +295,11 @@
 <script>
 import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { documentService, authService, notificationService } from "../services/api";
+import {
+  documentService,
+  authService,
+  notificationService,
+} from "../services/api";
 import { authStore } from "../store/auth";
 import SubmitForReviewModal from "../components/SubmitForReviewModal.vue";
 
@@ -278,6 +326,48 @@ export default {
     });
     const groupNames = ref({});
     const usernames = ref({});
+    const searchQuery = ref('');
+    const selectedStatuses = ref([]);
+
+    const statusFilters = [
+      { label: 'All', value: '', activeClass: 'bg-cyan-700 text-white' },
+      { label: 'Draft', value: 'draft', activeClass: 'bg-gray-600 text-white' },
+      { label: 'Pending', value: 'pending_review', activeClass: 'bg-yellow-600 text-white' },
+      { label: 'Published', value: 'published', activeClass: 'bg-green-600 text-white' },
+      { label: 'Rejected', value: 'rejected', activeClass: 'bg-red-600 text-white' },
+    ];
+
+    const toggleStatusFilter = (status) => {
+      if (status === '') {
+        // If "All" is clicked, clear other filters
+        selectedStatuses.value = [];
+        return;
+      }
+      
+      const index = selectedStatuses.value.indexOf(status);
+      if (index === -1) {
+        selectedStatuses.value.push(status);
+      } else {
+        selectedStatuses.value.splice(index, 1);
+      }
+    };
+
+    const filteredDocuments = computed(() => {
+      return documents.value.filter(doc => {
+        // Apply search filter
+        const searchLower = searchQuery.value.toLowerCase();
+        const matchesSearch = 
+          doc.title.toLowerCase().includes(searchLower) ||
+          doc.description.toLowerCase().includes(searchLower);
+
+        // Apply status filter
+        const matchesStatus = 
+          selectedStatuses.value.length === 0 || 
+          selectedStatuses.value.includes(doc.status);
+
+        return matchesSearch && matchesStatus;
+      });
+    });
 
     const fetchGroupNames = async () => {
       try {
@@ -338,17 +428,6 @@ export default {
       selectedDocumentId.value = docId;
       selectedGroupId.value = doc.realmId;
       showSubmitModal.value = true;
-
-      try {
-        await notificationService.createNotification(
-          doc.currentReviewerId,
-          docId,
-          'document_for_review',
-          `Document "${doc.title}" needs your review`
-        );
-      } catch (error) {
-        console.error('Error sending notification:', error);
-      }
     };
 
     const editDocument = (docId) => {
@@ -421,12 +500,39 @@ export default {
     };
 
     const formatDate = (dateString) => {
-      if (!dateString) return "";
       const date = new Date(dateString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}/${month}/${day}`;
+      const now = new Date();
+      const diff = now - date + date.getTimezoneOffset() * 60000;
+
+      // Convert to minutes
+      const minutes = Math.floor(diff / 60000);
+
+      if (minutes < 1) {
+        return "just now";
+      }
+
+      if (minutes < 60) {
+        return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) {
+        return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+      }
+
+      const days = Math.floor(hours / 24);
+      if (days < 7) {
+        return `${days} day${days > 1 ? "s" : ""} ago`;
+      }
+
+      return (
+        "on " +
+        date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      );
     };
 
     // Update onMounted to fetch group names
@@ -495,6 +601,11 @@ export default {
       selectedGroupId,
       handleReviewSubmitted,
       getCurrentUserId,
+      searchQuery,
+      statusFilters,
+      filteredDocuments,
+      toggleStatusFilter,
+      selectedStatuses,
     };
   },
 };

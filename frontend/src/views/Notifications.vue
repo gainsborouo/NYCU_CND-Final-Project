@@ -1,12 +1,20 @@
 <template>
   <div class="min-h-[calc(100vh-3.5rem)] bg-gray-950 text-gray-100 p-6">
     <div class="max-w-3xl mx-auto">
-      <h2 class="text-2xl font-bold mb-8">Notifications</h2>
+      <div class="flex justify-between items-center mb-8">
+        <h2 class="text-2xl font-bold">Notifications</h2>
+        <button
+          @click="hideRead = !hideRead"
+          class="px-3 py-1.5 text-sm border border-gray-600 text-gray-400 rounded hover:bg-gray-700 transition-colors duration-200"
+        >
+          {{ !hideRead ? "Show all notifications" : "Show unread only" }}
+        </button>
+      </div>
 
       <!-- Notifications List -->
       <div class="space-y-4">
         <div
-          v-for="notification in notifications"
+          v-for="notification in filteredNotifications"
           :key="notification.id"
           class="p-4 bg-gray-800 rounded-lg border border-gray-700 hover:bg-gray-800/80 transition-colors duration-200"
         >
@@ -22,14 +30,17 @@
             </div>
             <div class="flex gap-2">
               <button
-                v-if="notification.type === 'review_request'"
+                v-if="notification.type === 'document_for_review'"
                 @click="goToReview(notification.documentId)"
                 class="px-3 py-1.5 text-xs bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
               >
                 Review
               </button>
               <button
-                v-if="notification.type === 'review_complete'"
+                v-if="
+                  notification.type === 'document_approved' ||
+                  notification.type === 'document_rejected'
+                "
                 @click="viewDocument(notification.documentId)"
                 class="px-3 py-1.5 text-xs bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
               >
@@ -58,7 +69,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { notificationService } from "../services/api";
 
@@ -69,6 +80,7 @@ export default {
     const notifications = ref([]);
     const loading = ref(false);
     const error = ref(null);
+    const hideRead = ref(true);
 
     const fetchNotifications = async () => {
       try {
@@ -111,22 +123,34 @@ export default {
     const formatDate = (dateString) => {
       const date = new Date(dateString);
       const now = new Date();
-      const diff = now - date;
+      const diff = now - date + date.getTimezoneOffset() * 60000;
 
       // Convert to minutes
       const minutes = Math.floor(diff / 60000);
 
+      if (minutes < 1) {
+        return "just now";
+      }
+
       if (minutes < 60) {
-        return `${minutes} minutes ago`;
+        return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
       }
 
       const hours = Math.floor(minutes / 60);
       if (hours < 24) {
-        return `${hours} hours ago`;
+        return `${hours} hour${hours > 1 ? "s" : ""} ago`;
       }
 
       const days = Math.floor(hours / 24);
-      return `${days} days ago`;
+      if (days < 7) {
+        return `${days} day${days > 1 ? "s" : ""} ago`;
+      }
+
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
     };
 
     const markAsRead = async (notificationId) => {
@@ -152,6 +176,13 @@ export default {
       router.push(`/viewer/${documentId}`);
     };
 
+    const filteredNotifications = computed(() => {
+      if (hideRead.value) {
+        return notifications.value.filter((n) => !n.isRead);
+      }
+      return notifications.value;
+    });
+
     onMounted(() => {
       fetchNotifications();
     });
@@ -163,6 +194,8 @@ export default {
       goToReview,
       viewDocument,
       markAsRead,
+      hideRead,
+      filteredNotifications,
     };
   },
 };
