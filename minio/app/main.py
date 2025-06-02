@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from minio import Minio
 from minio.error import S3Error
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
+import json
 from pathlib import Path
 from datetime import timedelta
 import os
@@ -70,6 +71,39 @@ async def generate_upload_url(uid: str, request: UploadUrlRequest):
         raise HTTPException(status_code=500, detail=f"MinIO error: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {e}")
+
+@app.get("/files/{uid}/{file_path:path}")
+async def redirect_file(uid: str, file_path: str):
+    """
+    Redirect a file from MinIO under uid-specific path.
+    """
+    # get file type based on file extension
+    file_ext = Path(file_path).suffix.lower()
+    if file_ext in [".md", ".markdown"]:
+        folder = f"markdown"
+    elif file_ext in [".png", ".jpg", ".jpeg"]:
+        folder = f"images"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    # Construct full object name
+    object_name = f"{uid}/{folder}/{file_path}"
+
+    # Verify object exists
+    try:
+        minio_client.stat_object(BUCKET_NAME, object_name)
+    except S3Error as e:
+        if e.code == "NoSuchKey":
+            raise HTTPException(status_code=404, detail="File not found")
+        raise
+
+    temp_read = await generate_read_url(uid, f"{folder}/{file_path}")
+    if temp_read.status_code != 200:
+        raise HTTPException(status_code=temp_read.status_code)
+
+    return RedirectResponse(
+        json.loads(temp_read.body.decode()).get("url")
+    )
 
 @app.get("/generate-read-url/{uid}/{file_path:path}")
 async def generate_read_url(uid: str, file_path: str):

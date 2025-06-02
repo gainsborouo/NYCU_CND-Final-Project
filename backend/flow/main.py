@@ -60,7 +60,7 @@ def get_session():
 oauth2_scheme = HTTPBearer()
 
 # --- Dependency to get User Context from JWT ---
-async def get_current_user_context(
+def get_current_user_context(
     token: HTTPAuthorizationCredentials = Depends(oauth2_scheme) # Get token from header
 ) -> UserRoles:
     """
