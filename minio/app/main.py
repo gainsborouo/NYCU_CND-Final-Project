@@ -72,13 +72,13 @@ async def generate_upload_url(uid: str, request: UploadUrlRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {e}")
 
-@app.get("/files/{uid}/{file_path:path}")
-async def redirect_file(uid: str, file_path: str):
+@app.get("/files/{uid}/{filename}")
+async def redirect_file(uid: str, filename: str):
     """
     Redirect a file from MinIO under uid-specific path.
     """
     # get file type based on file extension
-    file_ext = Path(file_path).suffix.lower()
+    file_ext = Path(filename).suffix.lower()
     if file_ext in [".md", ".markdown"]:
         folder = f"markdown"
     elif file_ext in [".png", ".jpg", ".jpeg"]:
@@ -87,7 +87,7 @@ async def redirect_file(uid: str, file_path: str):
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
     # Construct full object name
-    object_name = f"{uid}/{folder}/{file_path}"
+    object_name = f"{uid}/{folder}/{filename}"
 
     # Verify object exists
     try:
@@ -97,7 +97,7 @@ async def redirect_file(uid: str, file_path: str):
             raise HTTPException(status_code=404, detail="File not found")
         raise
 
-    temp_read = await generate_read_url(uid, f"{folder}/{file_path}")
+    temp_read = await generate_read_url(uid, f"{filename}")
     if temp_read.status_code != 200:
         raise HTTPException(status_code=temp_read.status_code)
 
@@ -105,14 +105,23 @@ async def redirect_file(uid: str, file_path: str):
         json.loads(temp_read.body.decode()).get("url")
     )
 
-@app.get("/generate-read-url/{uid}/{file_path:path}")
-async def generate_read_url(uid: str, file_path: str):
+@app.get("/generate-read-url/{uid}/{filename}")
+async def generate_read_url(uid: str, filename: str):
     """
     Generate a presigned URL for reading a file from MinIO under uid-specific path.
     """
     try:
+        # get file type based on file extension
+        file_ext = Path(filename).suffix.lower()
+        if file_ext in [".md", ".markdown"]:
+            folder = f"markdown"
+        elif file_ext in [".png", ".jpg", ".jpeg"]:
+            folder = f"images"
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+
         # Construct full object name
-        object_name = f"{uid}/{file_path}"
+        object_name = f"{uid}/{folder}/{filename}"
 
         # Verify object exists
         try:
