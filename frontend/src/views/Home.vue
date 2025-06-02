@@ -23,8 +23,8 @@
       <div class="max-w-6xl mx-auto">
         <div class="flex justify-between items-center mb-8">
           <h2 class="text-2xl font-bold text-gray-100">Your Documents</h2>
-          <router-link
-            to="/editor"
+          <button
+            @click="showCreateModal = true"
             class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600 transition-colors duration-300 flex items-center gap-2"
           >
             <svg
@@ -40,7 +40,7 @@
               />
             </svg>
             New Document
-          </router-link>
+          </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -128,6 +128,67 @@
             </div>
           </div>
         </div>
+
+        <!-- Create Document Modal -->
+        <div
+          v-if="showCreateModal"
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+        >
+          <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h3 class="text-xl font-semibold mb-4">Create New Document</h3>
+            <form @submit.prevent="createDocument">
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Title</label>
+                <input
+                  v-model="newDocument.title"
+                  type="text"
+                  class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                  required
+                />
+              </div>
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description</label>
+                <textarea
+                  v-model="newDocument.description"
+                  class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                  rows="3"
+                ></textarea>
+              </div>
+              <div class="mb-6">
+                <label class="block text-sm font-medium mb-2">Group</label>
+                <select
+                  v-model="newDocument.realmId"
+                  class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                  required
+                >
+                  <option value="" disabled>Select a group</option>
+                  <option
+                    v-for="group in userGroups"
+                    :key="group.id"
+                    :value="group.id"
+                  >
+                    {{ group.name }}
+                  </option>
+                </select>
+              </div>
+              <div class="flex justify-end gap-3">
+                <button
+                  type="button"
+                  @click="showCreateModal = false"
+                  class="px-4 py-2 text-gray-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -147,6 +208,32 @@ export default {
     const documents = ref([]);
     const isLoggedIn = computed(() => authStore.token);
     const isReviewer = ref(true);
+    const showCreateModal = ref(false);
+    const userGroups = ref([]);
+    const newDocument = ref({
+      title: "",
+      description: "",
+      realmId: ""
+    });
+
+    const getUserGroups = () => {
+      try {
+        const token = authStore.token;
+        if (!token) return [];
+        
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const realmRoles = payload.realm_roles || {};
+        
+        return Object.entries(realmRoles).map(([id, roles]) => ({
+          id,
+          name: `Group ${id}`,
+          roles
+        }));
+      } catch (error) {
+        console.error("Error parsing user groups:", error);
+        return [];
+      }
+    };
 
     const getStatusClass = (status) => {
       const classes = {
@@ -217,12 +304,37 @@ export default {
       }
     };
 
+    const createDocument = async () => {
+      try {
+        const response = await documentService.createDocument({
+          title: newDocument.value.title,
+          description: newDocument.value.description
+        });
+        
+        showCreateModal.value = false;
+        if (response.data && response.data.id) {
+          router.push(`/editor/${response.data.id}`);
+          // Reset form
+          newDocument.value = {
+            title: '',
+            description: ''
+          };
+        }
+      } catch (error) {
+        console.error('Error creating document:', error);
+        // You might want to show an error message to the user here
+      }
+    };
+
+    // Update onMounted to set userGroups
     onMounted(async () => {
       if (isLoggedIn.value) {
         await fetchDocuments();
+        userGroups.value = getUserGroups();
       }
     });
 
+    // Make sure to return userGroups in the return statement
     return {
       isLoggedIn,
       isReviewer,
@@ -233,6 +345,10 @@ export default {
       reviewDocument,
       viewDocument,
       createNewVersion,
+      showCreateModal,
+      newDocument,
+      createDocument,
+      userGroups, // Add this line
     };
   },
 };
