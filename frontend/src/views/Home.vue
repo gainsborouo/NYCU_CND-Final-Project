@@ -215,7 +215,7 @@ export default {
     const newDocument = ref({
       title: "",
       description: "",
-      creatorId: "",
+      realmId: "",
     });
 
     const getUserGroups = () => {
@@ -322,7 +322,7 @@ export default {
         const response = await documentService.createDocument({
           title: newDocument.value.title,
           description: newDocument.value.description,
-          creatorId: newDocument.value.creatorId,
+          realmId: newDocument.value.realmId,
         });
 
         showCreateModal.value = false;
@@ -332,6 +332,7 @@ export default {
           newDocument.value = {
             title: "",
             description: "",
+            realmId: "",
           };
         }
       } catch (error) {
