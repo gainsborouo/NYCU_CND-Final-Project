@@ -24,4 +24,5 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run tests
+        working-directory: ./backend/flow
         run: uv run pytest
