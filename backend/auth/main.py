@@ -380,6 +380,11 @@ async def delete_group(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Group with ID {group_name} not found."
         )
+    session.exec(
+        UserGroupRole.__table__.delete().where(
+            UserGroupRole.group_id == group.id
+        )
+    )
     session.delete(group)
     session.commit()
     return {"message": f"Group {group_name} deleted successfully"}
