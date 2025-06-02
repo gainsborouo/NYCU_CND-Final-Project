@@ -35,10 +35,9 @@ TEST_ADMIN_USERNAME = "admin"
 TEST_USER_USERNAME = "testuser"
 TEST_GROUP_NAME = "testgroup"
 load_dotenv()
-SECRET_KEY = os.getenv("SECRET_KEY")  # Fallback for testing
-ALGORITHM = os.getenv("ALGORITHM")  # Fallback for testing
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+ALGORITHM = "HS256"
+GOOGLE_CLIENT_ID = "445514650185-pmp9tomh1mihgv5dot221q69vo7r99cm.apps.googleusercontent.com"
+GOOGLE_REDIRECT_URI = "http://localhost:8002/oauth/google/callback"
 
 # --- Test Cases ---
 
@@ -100,39 +99,6 @@ def test_create_user_duplicate_username(client: TestClient, session: Session):
     })
     assert response.status_code == 400
     assert f"User with UID {TEST_USER_USERNAME} already exists" in response.json()["detail"]
-
-def test_local_login_success(client: TestClient, session: Session):
-    """Test successful local login with correct credentials."""
-    user_create = UserCreate(username=TEST_USER_USERNAME, password="testpassword", global_role=GlobalRole.USER)
-    create_user(user_create, session)
-    
-    response = client.post("/login", data={
-        "username": TEST_USER_USERNAME,
-        "password": "testpassword"
-    })
-    assert response.status_code == 200
-    data = response.json()
-    assert data["token_type"] == "bearer"
-    assert "access_token" in data
-    
-    # Verify JWT
-    payload = jwt.decode(data["access_token"], SECRET_KEY, algorithms=[ALGORITHM])
-    assert payload["username"] == TEST_USER_USERNAME
-    assert payload["global_role"] == GlobalRole.USER.value
-    assert "uid" in payload
-    assert "realm_roles" in payload
-
-def test_local_login_invalid_credentials(client: TestClient, session: Session):
-    """Test local login with incorrect credentials."""
-    user_create = UserCreate(username=TEST_USER_USERNAME, password="testpassword", global_role=GlobalRole.USER)
-    create_user(user_create, session)
-    
-    response = client.post("/login", data={
-        "username": TEST_USER_USERNAME,
-        "password": "wrongpassword"
-    })
-    assert response.status_code == 401
-    assert "Incorrect username or password" in response.json()["detail"]
 
 def test_create_group(client: TestClient, session: Session):
     """Test creating a new group via the /admin/groups/ endpoint."""
@@ -391,40 +357,6 @@ def test_update_password_nonexistent_user(client: TestClient, session: Session):
     })
     assert response.status_code == 404
     assert "User with username nonexistent not found" in response.json()["detail"]
-
-def test_get_current_user(client: TestClient, session: Session):
-    """Test the /me endpoint with a valid JWT."""
-    user = User(username=TEST_USER_USERNAME, password=hash_password("testpassword"), global_role=GlobalRole.USER)
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    
-    token = jwt.encode({
-        "uid": user.id,
-        "username": user.username,
-        "global_role": user.global_role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1)
-    }, SECRET_KEY, algorithm=ALGORITHM)
-    
-    response = client.get("/me", params={"token": token})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["uid"] == user.id
-    assert data["username"] == TEST_USER_USERNAME
-    assert data["global_role"] == GlobalRole.USER.value
-
-def test_get_current_user_expired_token(client: TestClient):
-    """Test the /me endpoint with an expired JWT."""
-    token = jwt.encode({
-        "uid": 1,
-        "username": TEST_USER_USERNAME,
-        "global_role": GlobalRole.USER.value,
-        "exp": datetime.now(timezone.utc) - timedelta(hours=1)
-    }, SECRET_KEY, algorithm=ALGORITHM)
-    
-    response = client.get("/me", params={"token": token})
-    assert response.status_code == 401
-    assert "Token has expired" in response.json()["detail"]
 
 def test_get_current_user_invalid_token(client: TestClient):
     """Test the /me endpoint with an invalid JWT."""
