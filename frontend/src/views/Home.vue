@@ -71,7 +71,7 @@
               <div class="flex items-center text-xs text-gray-400 gap-2 mt-2">
                 <span class="text-cyan-500">{{ doc.realmId }}</span>
                 <span>•</span>
-                <span>{{ doc.updatedAt }}</span>
+                <span>Last edited {{ formatDate(doc.updatedAt) }}</span>
               </div>
             </div>
 
@@ -132,7 +132,7 @@
         <!-- Create Document Modal -->
         <div
           v-if="showCreateModal"
-          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          class="fixed inset-0 bg-gray-950/90 flex items-center justify-center p-4"
         >
           <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 class="text-xl font-semibold mb-4">Create New Document</h3>
@@ -147,7 +147,9 @@
                 />
               </div>
               <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Description</label>
+                <label class="block text-sm font-medium mb-2"
+                  >Description</label
+                >
                 <textarea
                   v-model="newDocument.description"
                   class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
@@ -213,21 +215,21 @@ export default {
     const newDocument = ref({
       title: "",
       description: "",
-      realmId: ""
+      realmId: "",
     });
 
     const getUserGroups = () => {
       try {
         const token = authStore.token;
         if (!token) return [];
-        
-        const payload = JSON.parse(atob(token.split('.')[1]));
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
         const realmRoles = payload.realm_roles || {};
-        
+
         return Object.entries(realmRoles).map(([id, roles]) => ({
           id,
           name: `Group ${id}`,
-          roles
+          roles,
         }));
       } catch (error) {
         console.error("Error parsing user groups:", error);
@@ -237,10 +239,10 @@ export default {
 
     const mapStatus = (status) => {
       const statusMap = {
-        'draft': 'Draft',
-        'pending_review': 'Pending Review',
-        'published': 'Published',
-        'rejected': 'Rejected'
+        draft: "Draft",
+        pending_review: "Pending Review",
+        published: "Published",
+        rejected: "Rejected",
       };
       return statusMap[status?.toLowerCase()] || status;
     };
@@ -248,12 +250,12 @@ export default {
     const getStatusClass = (status) => {
       const mappedStatus = mapStatus(status);
       const classes = {
-        'Draft': 'bg-gray-600 text-gray-100',
-        'Pending Review': 'bg-yellow-600 text-yellow-100',
-        'Published': 'bg-green-600 text-green-100',
-        'Rejected': 'bg-red-600 text-red-100',
+        Draft: "bg-gray-600 text-gray-100",
+        "Pending Review": "bg-yellow-600 text-yellow-100",
+        Published: "bg-green-600 text-green-100",
+        Rejected: "bg-red-600 text-red-100",
       };
-      return classes[mappedStatus] || 'bg-gray-600 text-gray-100';
+      return classes[mappedStatus] || "bg-gray-600 text-gray-100";
     };
 
     const fetchDocuments = async () => {
@@ -320,22 +322,31 @@ export default {
         const response = await documentService.createDocument({
           title: newDocument.value.title,
           description: newDocument.value.description,
-          realmId: newDocument.value.realmId
+          realmId: newDocument.value.realmId,
         });
-        
+
         showCreateModal.value = false;
         if (response.data && response.data.id) {
           router.push(`/editor/${response.data.id}`);
           // Reset form
           newDocument.value = {
-            title: '',
-            description: ''
+            title: "",
+            description: "",
           };
         }
       } catch (error) {
-        console.error('Error creating document:', error);
+        console.error("Error creating document:", error);
         // You might want to show an error message to the user here
       }
+    };
+
+    const formatDate = (dateString) => {
+      if (!dateString) return "";
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}/${month}/${day}`;
     };
 
     // Update onMounted to set userGroups
@@ -361,6 +372,7 @@ export default {
       newDocument,
       createDocument,
       userGroups,
+      formatDate,
     };
   },
 };

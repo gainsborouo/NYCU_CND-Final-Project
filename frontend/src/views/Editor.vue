@@ -34,16 +34,11 @@
     <div class="fixed bottom-6 right-6">
       <button
         @click="saveDocument"
-        class="px-4 py-2 bg-cyan-700/80 hover:bg-cyan-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2 hover:scale-105 save-button"
+        class="px-4 py-2 bg-cyan-700/40 hover:bg-cyan-600/60 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2 hover:scale-105 save-button"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-5 w-5"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 448 512" fill="currentColor">
           <path
-            d="M17 3a1 1 0 00-1-1h-3.586A2 2 0 0011 2.586L9.414 4H5a1 1 0 00-1 1v12a1 1 0 001 1h10a1 1 0 001-1V3zm-6 0h2v2h-2V3zM6 14v-2h8v2H6z"
+            d="M48 96l0 320c0 8.8 7.2 16 16 16l320 0c8.8 0 16-7.2 16-16l0-245.5c0-4.2-1.7-8.3-4.7-11.3l33.9-33.9c12 12 18.7 28.3 18.7 45.3L448 416c0 35.3-28.7 64-64 64L64 480c-35.3 0-64-28.7-64-64L0 96C0 60.7 28.7 32 64 32l245.5 0c17 0 33.3 6.7 45.3 18.7l74.5 74.5-33.9 33.9L320.8 84.7c-.3-.3-.5-.5-.8-.8L320 184c0 13.3-10.7 24-24 24l-192 0c-13.3 0-24-10.7-24-24L80 80 64 80c-8.8 0-16 7.2-16 16zm80-16l0 80 144 0 0-80L128 80zm32 240a64 64 0 1 1 128 0 64 64 0 1 1 -128 0z"
           />
         </svg>
         Save
@@ -306,19 +301,19 @@ export default {
       try {
         const documentId = route.params.id;
         const { data } = await documentService.updateDocument(documentId);
-        
+
         // Upload content to Minio URL
         if (data.url) {
           const response = await fetch(data.url, {
-            method: 'PUT',
+            method: "PUT",
             headers: {
-              'Content-Type': 'text/markdown',
+              "Content-Type": "text/markdown",
             },
-            body: markdown.value
+            body: markdown.value,
           });
 
           if (!response.ok) {
-            throw new Error('Failed to upload to Minio');
+            throw new Error("Failed to upload to Minio");
           }
         }
 
@@ -368,12 +363,12 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .save-success {
-  background-color: color-mix(in oklab, var(--color-green-600));
+  background-color: rgba(22, 163, 74, 0.8); /* bg-green-600/80 */
   transform: scale(1.05);
 }
 
 .save-error {
-  background-color: color-mix(in oklab, var(--color-red-600));
+  background-color: rgba(220, 38, 38, 0.8); /* bg-red-600/80 */
   animation: shake 0.5s ease-in-out;
 }
 
