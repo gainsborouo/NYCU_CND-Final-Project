@@ -8,7 +8,7 @@
           <div class="flex items-center gap-3 text-sm text-gray-400 py-2">
             <span class="text-cyan-500">{{ authorUsername }}</span>
             <span>•</span>
-            <span>Last edited {{ lastModifiedDate }}</span>
+            <span>Last updated {{ lastModifiedDate }}</span>
           </div>
         </div>
         <span
@@ -104,12 +104,39 @@ export default {
     const authorUsername = ref("");
 
     const formatDate = (dateString) => {
-      if (!dateString) return "Not available";
       const date = new Date(dateString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}/${month}/${day}`;
+      const now = new Date();
+      const diff = now - date + date.getTimezoneOffset() * 60000;
+
+      // Convert to minutes
+      const minutes = Math.floor(diff / 60000);
+
+      if (minutes < 1) {
+        return "just now";
+      }
+
+      if (minutes < 60) {
+        return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) {
+        return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+      }
+
+      const days = Math.floor(hours / 24);
+      if (days < 7) {
+        return `${days} day${days > 1 ? "s" : ""} ago`;
+      }
+
+      return (
+        "on " +
+        date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      );
     };
 
     const fetchDocument = async () => {

@@ -210,15 +210,6 @@ export const notificationService = {
       is_read: isRead,
     });
   },
-
-  async createNotification(recipientId, documentId, type, message) {
-    return api.post('/flow/notifications', {
-      recipient_id: recipientId,
-      document_id: documentId,
-      type,
-      message
-    });
-  }
 };
 
 export const fileService = {

@@ -15,7 +15,7 @@
           <div class="flex items-center gap-3 text-sm text-gray-400">
             <span class="text-cyan-500">{{ authorUsername }}</span>
             <span>•</span>
-            <span>Last modified: {{ lastModifiedDate }}</span>
+            <span>Last updated {{ lastModifiedDate }}</span>
           </div>
         </div>
       </div>
@@ -341,10 +341,10 @@ export default {
 
     const handleDrop = async (event) => {
       try {
-        const files = Array.from(event.dataTransfer.files).filter((file) =>
-          file && file.type && file.type.startsWith("image/")
+        const files = Array.from(event.dataTransfer.files).filter(
+          (file) => file && file.type && file.type.startsWith("image/")
         );
-        
+
         if (files.length === 0) {
           console.warn("No valid image files found");
           return;
@@ -363,7 +363,7 @@ export default {
             insertText(loadingText);
 
             const imageUrl = await uploadImage(file);
-            
+
             // Replace loading text with actual image
             markdown.value = markdown.value.replace(
               loadingText,
@@ -372,7 +372,7 @@ export default {
           } catch (error) {
             console.error(`Failed to upload image: ${file.name}`, error);
             // Remove loading text on error
-            markdown.value = markdown.value.replace(loadingText, '');
+            markdown.value = markdown.value.replace(loadingText, "");
           }
         }
       } catch (error) {
@@ -387,7 +387,7 @@ export default {
       const before = markdown.value.substring(0, pos);
       const after = markdown.value.substring(pos);
       markdown.value = `${before}${text}${after}`;
-      
+
       // Update cursor position
       textarea.focus();
       const newPos = pos + text.length;
@@ -399,13 +399,13 @@ export default {
       // Get user token first
       const token = localStorage.getItem("jwtToken");
       if (!token) {
-        throw new Error('Authentication required');
+        throw new Error("Authentication required");
       }
 
       try {
         // Validate file
         if (!file || !file.name) {
-          throw new Error('Invalid file object');
+          throw new Error("Invalid file object");
         }
 
         // Parse token to get uid
@@ -413,28 +413,31 @@ export default {
         const uid = payload.uid;
 
         if (!uid) {
-          throw new Error('User ID not found in token');
+          throw new Error("User ID not found in token");
         }
 
         // Get file extension with fallback
-        const fileNameParts = file.name.split('.');
-        const fileExt = fileNameParts.length > 1 ? fileNameParts.pop() : 'png';
-        
+        const fileNameParts = file.name.split(".");
+        const fileExt = fileNameParts.length > 1 ? fileNameParts.pop() : "png";
+
         // Generate unique filename
         const uuid = uuidv4();
         const filename = `${uuid}.${fileExt}`;
 
         // Get upload URL
-        const { url: uploadUrl } = await fileService.generateUploadUrl(uid, filename);
+        const { url: uploadUrl } = await fileService.generateUploadUrl(
+          uid,
+          filename
+        );
 
         if (!uploadUrl) {
-          throw new Error('Failed to get upload URL');
+          throw new Error("Failed to get upload URL");
         }
 
         const response = await fetch(uploadUrl, {
           method: "PUT",
           headers: {
-            "Content-Type": file.type || 'image/png',
+            "Content-Type": file.type || "image/png",
           },
           body: file,
         });
@@ -443,7 +446,9 @@ export default {
           throw new Error(`Upload failed: ${response.statusText}`);
         }
 
-        return `${import.meta.env.VITE_API_BASE_URL}minio-api/files/${uid}/${filename}`;
+        return `${
+          import.meta.env.VITE_API_BASE_URL
+        }minio-api/files/${uid}/${filename}`;
       } catch (error) {
         console.error("Error uploading image:", error);
         throw error;
@@ -492,12 +497,39 @@ export default {
         editingDescription.value = data.description || "";
 
         const formatDate = (dateString) => {
-          if (!dateString) return "Not available";
           const date = new Date(dateString);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, "0");
-          const day = String(date.getDate()).padStart(2, "0");
-          return `${year}/${month}/${day}`;
+          const now = new Date();
+          const diff = now - date + date.getTimezoneOffset() * 60000;
+
+          // Convert to minutes
+          const minutes = Math.floor(diff / 60000);
+
+          if (minutes < 1) {
+            return "just now";
+          }
+
+          if (minutes < 60) {
+            return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+          }
+
+          const hours = Math.floor(minutes / 60);
+          if (hours < 24) {
+            return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+          }
+
+          const days = Math.floor(hours / 24);
+          if (days < 7) {
+            return `${days} day${days > 1 ? "s" : ""} ago`;
+          }
+
+          return (
+            "on " +
+            date.toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
+          );
         };
 
         documentAuthor.value = data.creator_id

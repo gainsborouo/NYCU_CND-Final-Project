@@ -21,7 +21,7 @@
               <div class="flex items-center gap-3 text-sm text-gray-400">
                 <span class="text-cyan-500">{{ authorUsername }}</span>
                 <span>•</span>
-                <span>Last edited {{ lastModifiedDate }}</span>
+                <span>Last updated {{ lastModifiedDate }}</span>
               </div>
             </div>
             <span
@@ -149,7 +149,7 @@ export default {
       status: "",
       content: "",
       creator_id: null,
-      updated_at: null
+      updated_at: null,
     });
     const authorUsername = ref("");
     const decision = ref("");
@@ -171,7 +171,7 @@ export default {
           description: data.description || "",
           status: data.status || "",
           creator_id: data.creator_id,
-          updated_at: data.updated_at
+          updated_at: data.updated_at,
         };
 
         // Fetch author username
@@ -192,8 +192,8 @@ export default {
         }
 
         // Verify document is in review state
-        if (data.status !== 'pending_review') {
-          router.push('/');
+        if (data.status !== "pending_review") {
+          router.push("/");
         }
       } catch (error) {
         console.error("Error fetching document:", error);
@@ -203,7 +203,7 @@ export default {
 
     const isValid = computed(() => {
       if (!decision.value) return false;
-      if (decision.value === 'reject' && !comments.value.trim()) return false;
+      if (decision.value === "reject" && !comments.value.trim()) return false;
       return true;
     });
 
@@ -213,7 +213,7 @@ export default {
       try {
         const reviewData = {
           action: decision.value.toLowerCase(), // ensure lowercase
-          rejection_reason: decision.value === 'reject' ? comments.value : null // use null instead of empty string
+          rejection_reason: decision.value === "reject" ? comments.value : null, // use null instead of empty string
         };
 
         await documentService.reviewDocument(
@@ -223,7 +223,7 @@ export default {
         );
 
         // Show success message or redirect
-        router.push('/');
+        router.push("/");
       } catch (err) {
         console.error("Error submitting review:", err);
         error.value = "Failed to submit review. Please try again.";
@@ -232,7 +232,7 @@ export default {
 
     const toggleDecision = (value) => {
       if (decision.value === value) {
-        decision.value = '';
+        decision.value = "";
       } else {
         decision.value = value;
       }
@@ -259,16 +259,45 @@ export default {
     };
 
     const formatDate = (dateString) => {
-      if (!dateString) return "Not available";
       const date = new Date(dateString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}/${month}/${day}`;
+      const now = new Date();
+      const diff = now - date + date.getTimezoneOffset() * 60000;
+
+      // Convert to minutes
+      const minutes = Math.floor(diff / 60000);
+
+      if (minutes < 1) {
+        return "just now";
+      }
+
+      if (minutes < 60) {
+        return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) {
+        return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+      }
+
+      const days = Math.floor(hours / 24);
+      if (days < 7) {
+        return `${days} day${days > 1 ? "s" : ""} ago`;
+      }
+
+      return (
+        "on " +
+        date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      );
     };
 
     // Add computed property for formatted date
-    const lastModifiedDate = computed(() => formatDate(document.value.updated_at));
+    const lastModifiedDate = computed(() =>
+      formatDate(document.value.updated_at)
+    );
 
     onMounted(() => {
       fetchDocument();
