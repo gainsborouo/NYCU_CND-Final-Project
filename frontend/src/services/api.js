@@ -171,6 +171,15 @@ export const documentService = {
       rejection_reason: rejectionReason,
     });
   },
+
+  getDocumentDetail(id) {
+    return api.get(`/flow/documents/${id}/details`);
+  },
+
+  async getMarkdownContent(url) {
+    const response = await fetch(url);
+    return response.text();
+  }
 };
 
 export const notificationService = {

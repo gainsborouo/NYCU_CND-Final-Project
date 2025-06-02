@@ -250,10 +250,10 @@ export default {
     const getStatusClass = (status) => {
       const mappedStatus = mapStatus(status);
       const classes = {
-        Draft: "bg-gray-600 text-gray-100",
-        "Pending Review": "bg-yellow-600 text-yellow-100",
-        Published: "bg-green-600 text-green-100",
-        Rejected: "bg-red-600 text-red-100",
+        'Draft': 'bg-gray-600 text-gray-100',
+        'Pending Review': 'bg-yellow-600 text-yellow-100',
+        'Published': 'bg-green-600 text-green-100',
+        'Rejected': 'bg-red-600 text-red-100',
       };
       return classes[mappedStatus] || "bg-gray-600 text-gray-100";
     };
