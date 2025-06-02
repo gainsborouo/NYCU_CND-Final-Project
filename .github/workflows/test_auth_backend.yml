@@ -1,0 +1,28 @@
+name: Test auth backend
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  uv-example:
+    name: python
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the project
+        working-directory: ./backend/auth
+        run: uv sync --locked --all-extras --dev
+
+      - name: Run tests
+        working-directory: ./backend/auth
+        run: uv run pytest
