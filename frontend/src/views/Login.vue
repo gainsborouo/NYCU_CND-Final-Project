@@ -57,6 +57,7 @@
             <button
               v-if="!isTokenReceived"
               @click="GoogleOAuthLogin"
+              type="button"
               class="w-full border border-cyan-700 text-cyan-700 font-bold py-2 px-4 rounded-lg 
                      transition-colors duration-200 hover:bg-cyan-700 hover:text-white
                      flex items-center justify-center"
