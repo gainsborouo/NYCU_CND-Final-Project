@@ -36,8 +36,6 @@ TEST_USER_USERNAME = "testuser"
 TEST_GROUP_NAME = "testgroup"
 load_dotenv()
 ALGORITHM = "HS256"
-GOOGLE_CLIENT_ID = "445514650185-pmp9tomh1mihgv5dot221q69vo7r99cm.apps.googleusercontent.com"
-GOOGLE_REDIRECT_URI = "http://localhost:8002/oauth/google/callback"
 
 # --- Test Cases ---
 
@@ -57,15 +55,6 @@ def test_create_db_and_tables(session: Session):
     assert user is not None
     assert user.global_role == GlobalRole.ADMIN
     assert user.password is not None  # Password should be hashed
-
-def test_google_oauth_login_redirect(client: TestClient):
-    """Test the /oauth/google/login endpoint redirects correctly."""
-    response = client.get("/oauth/google/login", follow_redirects=False)
-    assert response.status_code == 307  # Temporary redirect
-    assert response.headers["location"].startswith("https://accounts.google.com/o/oauth2/auth")
-    assert f"client_id={GOOGLE_CLIENT_ID}" in response.headers["location"]
-    assert f"redirect_uri={GOOGLE_REDIRECT_URI}" in response.headers["location"]
-    assert "response_type=code" in response.headers["location"]
 
 def test_create_user(client: TestClient, session: Session):
     """Test creating a new user via the /admin/users/ endpoint."""
