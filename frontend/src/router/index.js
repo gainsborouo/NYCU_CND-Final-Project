@@ -18,7 +18,7 @@ const routes = [
     component: Login,
   },
   {
-    path: "/editor/:id?",
+    path: "/editor/:id",
     name: "Editor",
     component: Editor,
     meta: { requiresAuth: true },
