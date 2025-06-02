@@ -180,6 +180,16 @@ export const documentService = {
     const response = await fetch(url);
     return response.text();
   },
+
+  async getDocumentReviewHistory(id) {
+    try {
+      const response = await api.get(`/flow/documents/${id}/review-history`);
+      return response;
+    } catch (error) {
+      console.error("Error fetching document history:", error);
+      throw error;
+    }
+  }
 };
 
 export const authService = {
@@ -198,6 +208,74 @@ export const authService = {
       .get(`/auth/admin/groups/${groupId}/reviewers`)
       .then((response) => response.data);
   },
+
+  // New API functions added below
+
+  // User management
+  getAllUsers() {
+    return api.get("/auth/admin/users/");
+  },
+
+  createUser(userData) {
+    return api.post("/auth/admin/users/", userData);
+  },
+
+  updatePassword(username, newPassword) {
+    return api.post("/auth/admin/password", {
+      username,
+      new_password: newPassword,
+    });
+  },
+
+  // Group management
+  getAllGroups() {
+    return api.get("/auth/admin/groups/all/");
+  },
+
+  createGroup(groupName) {
+    return api.post("/auth/admin/groups/", {
+      group_name: groupName,
+    });
+  },
+
+  deleteGroup(groupName) {
+    return api.delete(`/auth/admin/groups/delete/${groupName}`);
+  },
+
+  // Role management
+  getAllUserGroupRoles() {
+    return api.get("/auth/admin/user-group-roles/");
+  },
+
+  assignGroupRoles(username, groupName, roles) {
+    return api.post("/auth/admin/groups/assign-roles", {
+      username,
+      group_name: groupName,
+      roles,
+    });
+  },
+
+  removeGroupRoles(username, groupName, roles) {
+    return api.delete("/auth/admin/groups/remove-roles", {
+      data: {
+        username,
+        group_name: groupName,
+        roles,
+      },
+    });
+  },
+
+  // Current user
+  getCurrentUser() {
+    const token = localStorage.getItem("jwtToken");
+    if (!token) return Promise.reject("No token found");
+
+    return api.get("/auth/me", {
+      headers: {
+        Authorization: `Bearer ${token.replace("Bearer ", "")}`,
+      },
+    });
+  },
 };
 
 export const notificationService = {
@@ -209,6 +287,11 @@ export const notificationService = {
     return api.patch(`/flow/notifications/${notificationId}`, {
       is_read: isRead,
     });
+  },
+
+  // Add the new method
+  markAsRead(notificationId) {
+    return api.patch(`/flow/notifications/${notificationId}/mark-as-read`);
   },
 };
 
