@@ -63,7 +63,22 @@ def on_startup():
                 password="admin",
                 global_role=GlobalRole.ADMIN
             )
-            create_user(admin_create, session)
+            admin_user = create_user(admin_create, session)
+        default_group = session.exec(select(Group).where(Group.group_name == "default")).first()
+        if not default_group:
+            group = Group(group_name="default")
+            session.add(group)
+            session.commit()
+            session.refresh(group)
+            # Assign admin role to admin user in default group
+            default_group = session.exec(select(Group).where(Group.group_name == "default")).first()
+            user_group_role = UserGroupRole(
+                user_id=admin_user.id,
+                group_id=default_group.id,
+                role=GroupRole.ADMIN
+            )
+            session.add(user_group_role)
+            session.commit()
 
 # --- OAuth2 Configuration ---
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
@@ -251,6 +266,16 @@ def create_user(
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    default_group = session.exec(select(Group).where(Group.group_name == "default")).first()
+    if default_group:
+        user_group_role = UserGroupRole(
+            user_id=user.id,
+            group_id=default_group.id,
+            role=GroupRole.USER
+        )
+        session.add(user_group_role)
+        session.commit()
     return user
 
 @app.post("/admin/users/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -320,6 +345,16 @@ async def create_group(
     session.add(group)
     session.commit()
     session.refresh(group)
+
+    admin_user = session.exec(select(User).where(User.username == "admin")).first()
+    if admin_user:
+        user_group_role = UserGroupRole(
+            user_id=admin_user.id,
+            group_id=group.id,
+            role=GroupRole.ADMIN
+        )
+        session.add(user_group_role)
+        session.commit()
     return group
 
 @app.delete("/admin/groups/delete/{group_name}", status_code=status.HTTP_200_OK, response_model=dict)
