@@ -153,22 +153,22 @@ async def auth_google(
             select(UserGroupRole).where(UserGroupRole.user_id == user.id)
         ).all()
 
-        # Construct ACL dictionary
         acl = {}
         for group_role in group_roles:
-            group_id = group_role.group_id
-            role = group_role.role
+            group_id = str(group_role.group_id)
+            role = group_role.role.value.lower()
             if group_id not in acl:
-                acl[group_id] = {"role": []}
-            acl[group_id]["role"].append(role)
-        
+                acl[group_id] = []
+            acl[group_id].append(role)
+
+        # Set token expiration (e.g., 1 hour)
         expiration = datetime.now(timezone.utc) + timedelta(hours=1)
         our_jwt_token = jwt.encode({
             "uid": user.id,
             "realm_roles": acl,
             "username": user.username,
-            "global_role": user.global_role,
-            "exp": expiration
+            "global_role": user.global_role.value.lower(),
+            "exp": int(expiration.timestamp())
         }, SECRET_KEY, algorithm=ALGORITHM)
 
         # return {
@@ -202,14 +202,13 @@ async def login(
     
     group_roles = session.exec(select(UserGroupRole).where(UserGroupRole.user_id == user.id)).all()
 
-    # Construct ACL dictionary
     acl = {}
     for group_role in group_roles:
-        group_id = group_role.group_id
-        role = group_role.role
+        group_id = str(group_role.group_id)
+        role = group_role.role.value.lower()
         if group_id not in acl:
-            acl[group_id] = {"role": []}
-        acl[group_id]["role"].append(role)
+            acl[group_id] = []
+        acl[group_id].append(role)
 
     # Set token expiration (e.g., 1 hour)
     expiration = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -217,8 +216,8 @@ async def login(
         "uid": user.id,
         "realm_roles": acl,
         "username": user.username,
-        "global_role": user.global_role,
-        "exp": expiration
+        "global_role": user.global_role.value.lower(),
+        "exp": int(expiration.timestamp())
     }, SECRET_KEY, algorithm=ALGORITHM)
 
     return {

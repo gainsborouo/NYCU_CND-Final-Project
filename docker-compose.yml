@@ -76,6 +76,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5  
+    volumes:
+      - flow_db_data:/var/lib/postgresql/data
   
   nginx:
     image: nginx:latest
@@ -96,3 +98,4 @@ networks:
 
 volumes:
   minio_data:
+  flow_db_data:
