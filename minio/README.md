@@ -25,7 +25,7 @@ curl -X PUT -T example.md "http://minio:9000/documents/{UID}/markdown/example.md
 
 ### Generate a read URL for a file
 ```
-curl http://minio-api:8000/generate-read-url/{UID}/markdown/example.md
+curl http://minio-api:8000/generate-read-url/{UID}/example.md
 ```
 
 #### Response
