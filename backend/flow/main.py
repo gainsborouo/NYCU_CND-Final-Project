@@ -652,7 +652,7 @@ def get_document_review_history(
         )
 
     # 3. Authorization Check
-    realm_id = int(db_document.realm_id)
+    realm_id = str(db_document.realm_id)
     is_admin_in_realm = user_context.has_role_in_realm(realm_id, "admin")
     is_user_in_realm = user_context.has_role_in_realm(realm_id, "user")
     is_reviewer_in_realm = user_context.has_role_in_realm(realm_id, "reviewer")

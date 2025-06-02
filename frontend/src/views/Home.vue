@@ -53,7 +53,7 @@
               :key="status.value"
               @click="toggleStatusFilter(status.value)"
               :class="[
-                'px-3 py-1.5 rounded-full text-sm transition-colors duration-200',
+                'px-3 py-1.5 rounded-2xl text-sm transition-colors duration-200',
                 selectedStatuses.includes(status.value)
                   ? status.activeClass
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
@@ -142,7 +142,7 @@
                 </template>
 
                 <template v-if="doc.status === 'rejected'">
-                  <!-- <button
+                  <button
                     @click="editDocument(doc.id)"
                     class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
                   >
@@ -153,7 +153,7 @@
                     class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
                   >
                     Submit for Review
-                  </button> -->
+                  </button>
                   <button
                     @click="viewDocument(doc.id)"
                     class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
@@ -332,7 +332,7 @@ export default {
     const statusFilters = [
       { label: 'All', value: '', activeClass: 'bg-cyan-700 text-white' },
       { label: 'Draft', value: 'draft', activeClass: 'bg-gray-600 text-white' },
-      { label: 'Pending', value: 'pending_review', activeClass: 'bg-yellow-600 text-white' },
+      { label: 'Pending Review', value: 'pending_review', activeClass: 'bg-yellow-600 text-white' },
       { label: 'Published', value: 'published', activeClass: 'bg-green-600 text-white' },
       { label: 'Rejected', value: 'rejected', activeClass: 'bg-red-600 text-white' },
     ];
