@@ -353,20 +353,22 @@ export default {
     };
 
     const filteredDocuments = computed(() => {
-      return documents.value.filter(doc => {
-        // Apply search filter
-        const searchLower = searchQuery.value.toLowerCase();
-        const matchesSearch = 
-          doc.title.toLowerCase().includes(searchLower) ||
-          doc.description.toLowerCase().includes(searchLower);
+      return documents.value
+        .filter(doc => {
+          // Apply search filter
+          const searchLower = searchQuery.value.toLowerCase();
+          const matchesSearch = 
+            doc.title.toLowerCase().includes(searchLower) ||
+            doc.description.toLowerCase().includes(searchLower);
 
-        // Apply status filter
-        const matchesStatus = 
-          selectedStatuses.value.length === 0 || 
-          selectedStatuses.value.includes(doc.status);
+          // Apply status filter
+          const matchesStatus = 
+            selectedStatuses.value.length === 0 || 
+            selectedStatuses.value.includes(doc.status);
 
-        return matchesSearch && matchesStatus;
-      });
+          return matchesSearch && matchesStatus;
+        })
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); // Sort by latest update
     });
 
     const fetchGroupNames = async () => {

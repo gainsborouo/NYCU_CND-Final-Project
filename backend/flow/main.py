@@ -352,7 +352,7 @@ def upload_document(
 
     # Determine what the user is allowed to update
     allowed_to_update_all = is_admin_in_realm
-    allowed_to_update_own_draft = is_creator and db_document.status == DocumentStatus.DRAFT
+    allowed_to_update_own_draft = is_creator and (db_document.status == DocumentStatus.DRAFT or db_document.status == DocumentStatus.REJECTED)
 
     # If not allowed to update anything, raise Forbidden
     if not allowed_to_update_all and not allowed_to_update_own_draft:
@@ -486,7 +486,7 @@ def submit_document_for_review(
         )
 
     # Document must be in DRAFT status to be submitted for review
-    if db_document.status != DocumentStatus.DRAFT:
+    if db_document.status != DocumentStatus.DRAFT and db_document.status != DocumentStatus.REJECTED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, # 409 Conflict indicates a conflict with current state
             detail=f"Document with ID {document_id} is not in DRAFT status and cannot be submitted for review."

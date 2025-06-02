@@ -92,6 +92,7 @@ export default {
           title: formatNotificationTitle(notification),
           message: notification.message,
           time: formatDate(notification.created_at),
+          created_at: notification.created_at,
           documentId: notification.document_id,
           isRead: notification.is_read,
         }));
@@ -177,10 +178,15 @@ export default {
     };
 
     const filteredNotifications = computed(() => {
-      if (hideRead.value) {
-        return notifications.value.filter((n) => !n.isRead);
-      }
-      return notifications.value;
+      const filtered = hideRead.value
+        ? notifications.value.filter((n) => !n.isRead)
+        : notifications.value;
+
+      return filtered.sort((a, b) => {
+        const dateA = new Date(a.created_at);  // Use original timestamp
+        const dateB = new Date(b.created_at);  // Use original timestamp
+        return dateB - dateA;
+      });
     });
 
     onMounted(() => {
