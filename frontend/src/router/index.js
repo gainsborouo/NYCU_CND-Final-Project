@@ -25,7 +25,7 @@ const routes = [
     props: true,
   },
   {
-    path: "/viewer/:id?",
+    path: "/viewer/:id",
     name: "Viewer",
     component: Viewer,
     meta: { requiresAuth: true },
@@ -38,7 +38,7 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
-    path: "/review/:id?",
+    path: "/review/:id",
     name: "Review",
     component: Review,
     meta: { requiresAuth: true },

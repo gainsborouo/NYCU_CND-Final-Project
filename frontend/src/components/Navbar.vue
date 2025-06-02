@@ -12,29 +12,11 @@
         >
           Home
         </router-link>
-        <!-- <router-link
-          to="/editor"
-          class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
-        >
-          Editor
-        </router-link> -->
-        <router-link
-          to="/viewer"
-          class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
-        >
-          Viewer
-        </router-link>
         <router-link
           to="/notifications"
           class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
         >
           Notifications
-        </router-link>
-        <router-link
-          to="/review"
-          class="text-gray-200 hover:text-cyan-700 transition-colors duration-300"
-        >
-          Review
         </router-link>
       </div>
 

@@ -13,7 +13,7 @@
             {{ documentTitle || "Untitled Document" }}
           </h1>
           <div class="flex items-center gap-3 text-sm text-gray-400">
-            <span class="text-cyan-500">{{ documentAuthor }}</span>
+            <span class="text-cyan-500">{{ authorUsername }}</span>
             <span>•</span>
             <span>Last modified: {{ lastModifiedDate }}</span>
           </div>
@@ -22,48 +22,57 @@
     </div>
 
     <!-- Edit Modal -->
-    <div
-      v-if="showEditModal"
-      class="fixed inset-0 bg-gray-950/90 flex items-center justify-center p-4 z-50"
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="transform opacity-0"
+      enter-to-class="transform opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="transform opacity-100"
+      leave-to-class="transform opacity-0"
     >
-      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h3 class="text-xl font-semibold mb-4">Edit Document Details</h3>
-        <form @submit.prevent="saveMetadata">
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Title</label>
-            <input
-              v-model="editingTitle"
-              type="text"
-              class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
-              required
-            />
-          </div>
-          <div class="mb-6">
-            <label class="block text-sm font-medium mb-2">Description</label>
-            <textarea
-              v-model="editingDescription"
-              class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
-              rows="3"
-            ></textarea>
-          </div>
-          <div class="flex justify-end gap-3">
-            <button
-              type="button"
-              @click="showEditModal = false"
-              class="px-4 py-2 text-gray-300 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
-            >
-              Save
-            </button>
-          </div>
-        </form>
+      <div
+        v-if="showEditModal"
+        class="fixed inset-0 bg-gray-950/90 flex items-center justify-center p-4 z-50"
+      >
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <h3 class="text-xl font-semibold mb-4">Edit Document Details</h3>
+          <form @submit.prevent="saveMetadata">
+            <div class="mb-4">
+              <label class="block text-sm font-medium mb-2">Title</label>
+              <input
+                v-model="editingTitle"
+                type="text"
+                class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                required
+              />
+            </div>
+            <div class="mb-6">
+              <label class="block text-sm font-medium mb-2">Description</label>
+              <textarea
+                v-model="editingDescription"
+                class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+              <button
+                type="button"
+                @click="showEditModal = false"
+                class="px-4 py-2 text-gray-300 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Editor Container -->
     <div class="flex flex-1 overflow-hidden">
@@ -121,7 +130,7 @@
 <script>
 import { ref, computed, watch, nextTick, onMounted } from "vue";
 import { useRoute } from "vue-router";
-import { documentService } from "../services/api";
+import { documentService, authService } from "../services/api";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
@@ -193,9 +202,39 @@ export default {
     const showEditModal = ref(false);
     const editingTitle = ref("");
     const editingDescription = ref("");
+    const loadingUsernames = ref(new Set());
+    const usernames = ref({});
 
     const renderedMarkdown = computed(() => {
       return DOMPurify.sanitize(md.render(markdown.value));
+    });
+
+    const fetchUsername = async (userId) => {
+      if (!userId) {
+        return "Unknown";
+      }
+
+      if (!usernames.value[userId] && !loadingUsernames.value.has(userId)) {
+        loadingUsernames.value.add(userId);
+        try {
+          const username = await authService.getUserUsername(userId);
+          usernames.value[userId] = username;
+        } catch (error) {
+          console.error(`Error fetching username for ${userId}:`, error);
+          usernames.value[userId] = userId;
+        } finally {
+          loadingUsernames.value.delete(userId);
+        }
+      }
+      return usernames.value[userId] || userId;
+    };
+
+    const authorUsername = computed(() => {
+      return (
+        usernames.value[documentAuthor.value] ||
+        documentAuthor.value ||
+        "Unknown"
+      );
     });
 
     const updateCursor = () => {
@@ -372,9 +411,14 @@ export default {
         };
 
         documentAuthor.value = data.creator_id
-          ? `User ${data.creator_id}`
+          ? `${data.creator_id}`
           : "Unknown";
         lastModifiedDate.value = formatDate(data.updated_at);
+
+        if (data.creator_id) {
+          await fetchUsername(data.creator_id);
+          // console.log("Fetched author username:", authorUsername.value);
+        }
 
         if (data.url) {
           const content = await documentService.getMarkdownContent(data.url);
@@ -462,6 +506,10 @@ export default {
       documentDescription,
       documentAuthor,
       lastModifiedDate,
+      fetchUsername,
+      authorUsername,
+      usernames,
+      loadingUsernames,
     };
   },
 };
