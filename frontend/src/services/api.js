@@ -182,6 +182,17 @@ export const documentService = {
   }
 };
 
+export const authService = {
+  getGroupNames() {
+    return api.get('/auth/admin/groups/names')
+  },
+  
+  getUserUsername(userId) {
+    return api.get(`/auth/admin/users/${userId}/username`)
+      .then(response => response.data.username)
+  }
+}
+
 export const notificationService = {
   getNotifications() {
     return api.get("/flow/notifications/");

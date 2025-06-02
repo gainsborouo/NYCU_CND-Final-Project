@@ -69,7 +69,9 @@
               </p>
 
               <div class="flex items-center text-xs text-gray-400 gap-2 mt-2">
-                <span class="text-cyan-500">{{ doc.creatorId }}</span>
+                <span class="text-cyan-500">{{
+                  usernames[doc.creatorId] || doc.creatorId
+                }}</span>
                 <span>•</span>
                 <span>Last edited {{ formatDate(doc.updatedAt) }}</span>
               </div>
@@ -130,67 +132,77 @@
         </div>
 
         <!-- Create Document Modal -->
-        <div
-          v-if="showCreateModal"
-          class="fixed inset-0 bg-gray-950/90 flex items-center justify-center p-4"
+        <Transition
+          enter-active-class="transition duration-300 ease-out"
+          enter-from-class="transform opacity-0"
+          enter-to-class="transform opacity-100"
+          leave-active-class="transition duration-200 ease-in"
+          leave-from-class="transform opacity-100"
+          leave-to-class="transform opacity-0"
         >
-          <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h3 class="text-xl font-semibold mb-4">Create New Document</h3>
-            <form @submit.prevent="createDocument">
-              <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Title</label>
-                <input
-                  v-model="newDocument.title"
-                  type="text"
-                  class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
-                  required
-                />
-              </div>
-              <div class="mb-4">
-                <label class="block text-sm font-medium mb-2"
-                  >Description</label
-                >
-                <textarea
-                  v-model="newDocument.description"
-                  class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
-                  rows="3"
-                ></textarea>
-              </div>
-              <div class="mb-6">
-                <label class="block text-sm font-medium mb-2">Group</label>
-                <select
-                  v-model="newDocument.realmId"
-                  class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
-                  required
-                >
-                  <option value="" disabled>Select a group</option>
-                  <option
-                    v-for="group in userGroups"
-                    :key="group.id"
-                    :value="group.id"
+          <div
+            v-if="showCreateModal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div class="fixed inset-0 bg-gray-950/90 backdrop-blur-sm" @click="showCreateModal = false"></div>
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md relative z-10">
+              <h3 class="text-xl font-semibold mb-4">Create New Document</h3>
+              <form @submit.prevent="createDocument">
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2">Title</label>
+                  <input
+                    v-model="newDocument.title"
+                    type="text"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  />
+                </div>
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2"
+                    >Description</label
                   >
-                    {{ group.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="flex justify-end gap-3">
-                <button
-                  type="button"
-                  @click="showCreateModal = false"
-                  class="px-4 py-2 text-gray-300 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
+                  <textarea
+                    v-model="newDocument.description"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    rows="3"
+                  ></textarea>
+                </div>
+                <div class="mb-6">
+                  <label class="block text-sm font-medium mb-2">Group</label>
+                  <select
+                    v-model="newDocument.realmId"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  >
+                    <option value="" disabled>Select a group</option>
+                    <option
+                      v-for="group in userGroups"
+                      :key="group.id"
+                      :value="group.id"
+                    >
+                      {{ group.name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    @click="showCreateModal = false"
+                    class="px-4 py-2 text-gray-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+                  >
+                    Create
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </Transition>
       </div>
     </div>
   </div>
@@ -199,7 +211,7 @@
 <script>
 import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { documentService } from "../services/api";
+import { documentService, authService } from "../services/api";
 import { authStore } from "../store/auth";
 
 export default {
@@ -217,24 +229,29 @@ export default {
       description: "",
       realmId: "",
     });
+    const groupNames = ref({});
+    const usernames = ref({});
 
-    const getUserGroups = () => {
+    const fetchGroupNames = async () => {
       try {
-        const token = authStore.token;
-        if (!token) return [];
-
-        const payload = JSON.parse(atob(token.split(".")[1]));
-        const realmRoles = payload.realm_roles || {};
-
-        return Object.entries(realmRoles).map(([id, roles]) => ({
-          id,
-          name: `Group ${id}`,
-          roles,
-        }));
+        const response = await authService.getGroupNames();
+        groupNames.value = response.data;
       } catch (error) {
-        console.error("Error parsing user groups:", error);
-        return [];
+        console.error("Error fetching group names:", error);
       }
+    };
+
+    const fetchUsername = async (userId) => {
+      if (!usernames.value[userId]) {
+        try {
+          const username = await authService.getUserUsername(userId);
+          usernames.value[userId] = username;
+        } catch (error) {
+          console.error(`Error fetching username for ${userId}:`, error);
+          usernames.value[userId] = userId;
+        }
+      }
+      return usernames.value[userId];
     };
 
     const mapStatus = (status) => {
@@ -250,10 +267,10 @@ export default {
     const getStatusClass = (status) => {
       const mappedStatus = mapStatus(status);
       const classes = {
-        'Draft': 'bg-gray-600 text-gray-100',
-        'Pending Review': 'bg-yellow-600 text-yellow-100',
-        'Published': 'bg-green-600 text-green-100',
-        'Rejected': 'bg-red-600 text-red-100',
+        Draft: "bg-gray-600 text-gray-100",
+        "Pending Review": "bg-yellow-600 text-yellow-100",
+        Published: "bg-green-600 text-green-100",
+        Rejected: "bg-red-600 text-red-100",
       };
       return classes[mappedStatus] || "bg-gray-600 text-gray-100";
     };
@@ -345,23 +362,46 @@ export default {
       if (!dateString) return "";
       const date = new Date(dateString);
       const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
       return `${year}/${month}/${day}`;
     };
 
-    // Update onMounted to set userGroups
+    // Update onMounted to fetch group names
     onMounted(async () => {
       if (isLoggedIn.value) {
-        await fetchDocuments();
+        await Promise.all([fetchGroupNames(), fetchDocuments()]);
         userGroups.value = getUserGroups();
+        for (const doc of documents.value) {
+          await fetchUsername(doc.creatorId);
+        }
       }
     });
+
+    const getUserGroups = () => {
+      try {
+        const token = authStore.token;
+        if (!token) return [];
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const realmRoles = payload.realm_roles || {};
+
+        return Object.entries(realmRoles).map(([id, roles]) => ({
+          id,
+          name: groupNames.value[id] || `Group ${id}`,
+          roles,
+        }));
+      } catch (error) {
+        console.error("Error parsing user groups:", error);
+        return [];
+      }
+    };
 
     return {
       isLoggedIn,
       isReviewer,
       documents,
+      usernames,
       getStatusClass,
       mapStatus,
       submitForReview,
@@ -374,6 +414,8 @@ export default {
       createDocument,
       userGroups,
       formatDate,
+      groupNames,
+      fetchUsername,
     };
   },
 };
