@@ -60,7 +60,7 @@ def on_startup():
         if not admin_user:
             admin_create = UserCreate(
                 username="admin",
-                password="admin",  # Hash the admin password
+                password="admin",
                 global_role=GlobalRole.ADMIN
             )
             create_user(admin_create, session)
@@ -188,7 +188,6 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session)
 ):
-    print(form_data.username)
     user = session.exec(
         select(User).where(User.username == form_data.username)
     ).first()
@@ -276,6 +275,19 @@ async def user_create(
     user = create_user(user_create, session)
     return UserRead.from_orm(user)
 
+@app.get("/admin/users/{user_id}/username", response_model=dict)
+async def get_username_by_id(
+    user_id: int,
+    session: Session = Depends(get_session)
+):
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found."
+        )
+    return {"username": user.username}
+
 @app.post("/admin/groups/", response_model=GroupRead, status_code=status.HTTP_201_CREATED)
 async def create_group(
     group_create: GroupCreate,
@@ -310,7 +322,7 @@ async def create_group(
     session.refresh(group)
     return group
 
-@app.delete("/admin/groups/delete/{group_name}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/admin/groups/delete/{group_name}", status_code=status.HTTP_200_OK, response_model=dict)
 async def delete_group(
     group_name: str,
     # admin_user_id: Annotated[int, Depends(verify_admin_role)],
@@ -335,8 +347,9 @@ async def delete_group(
         )
     session.delete(group)
     session.commit()
+    return {"message": f"Group {group_name} deleted successfully"}
 
-@app.post("/admin/groups/assign-roles", status_code=status.HTTP_204_NO_CONTENT)
+@app.post("/admin/groups/assign-roles", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def assign_group_roles(
     assignment: GroupRoleAssignment,
     # admin_user_id: Annotated[int, Depends(verify_admin_role)],
@@ -388,8 +401,9 @@ async def assign_group_roles(
         session.add(user_group_role)
     
     session.commit()
+    return {"message": f"Roles {assignment.roles} assigned to user {assignment.username} in group {assignment.group_name}"}
 
-@app.delete("/admin/groups/remove-roles", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/admin/groups/remove-roles", status_code=status.HTTP_200_OK, response_model=dict)
 async def remove_group_roles(
     assignment: GroupRoleAssignment,
     # admin_user_id: Annotated[int, Depends(verify_admin_role)],
@@ -442,6 +456,7 @@ async def remove_group_roles(
         )
     
     session.commit()
+    return {"message": f"Roles {assignment.roles} removed for user {assignment.username} in group {assignment.group_name}"}
 
 @app.get("/admin/users/", response_model=List[UserRead])
 async def get_all_users(
@@ -484,7 +499,7 @@ async def get_all_user_group_roles(
     user_group_roles = session.exec(select(UserGroupRole)).all()
     return user_group_roles
 
-@app.post("/admin/password", status_code=status.HTTP_204_NO_CONTENT)
+@app.post("/admin/password", status_code=status.HTTP_200_OK, response_model=dict)
 async def update_password(
     password_update: PasswordUpdate,
     session: Session = Depends(get_session)
@@ -511,6 +526,62 @@ async def update_password(
     user.password = hash_password(password_update.new_password)
     session.add(user)
     session.commit()
+    return {"message": f"Password updated successfully for user {password_update.username}"}
+
+@app.get("/admin/groups/names", response_model=dict)
+async def get_group_names(
+    token: str = Depends(oauth2_scheme),
+    session: Session = Depends(get_session)
+):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        realm_roles = payload.get("realm_roles", {})
+        
+        if not realm_roles:
+            return {}
+        
+        group_ids = [int(gid) for gid in realm_roles.keys()]
+        groups = session.exec(
+            select(Group).where(Group.id.in_(group_ids))
+        ).all()
+        
+        group_name_map = {str(group.id): group.group_name for group in groups}
+        return group_name_map
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during token processing: {str(e)}"
+        )
+
+@app.get("/admin/groups/{group_id}/reviewers", response_model=dict)
+async def get_group_reviewers(
+    group_id: int,
+    session: Session = Depends(get_session)
+):
+    group = session.exec(select(Group).where(Group.id == group_id)).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Group with ID {group_id} not found."
+        )
+    
+    reviewers = session.exec(
+        select(User.id, User.username)
+        .join(UserGroupRole)
+        .where(
+            UserGroupRole.group_id == group_id,
+            UserGroupRole.role == GroupRole.REVIEWER,
+            User.id == UserGroupRole.user_id
+        )
+    ).all()
+    
+    return {str(user_id): username for user_id, username in reviewers}
 
 @app.get("/me")
 async def get_current_user(
