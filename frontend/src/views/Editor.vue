@@ -273,7 +273,7 @@ export default {
         const documentId = route.params.id;
         const { data } = await documentService.getDocumentDetail(documentId);
 
-        console.log("Fetched document data:", data);
+        // console.log("Fetched document data:", data);
 
         if (data.url) {
           const content = await documentService.getMarkdownContent(data.url);
