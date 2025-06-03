@@ -1,4 +1,4 @@
-name: Test auth backend
+name: Test Backend (auth)
 
 on:
   push:

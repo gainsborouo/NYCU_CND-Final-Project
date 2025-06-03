@@ -189,7 +189,7 @@ export const documentService = {
       console.error("Error fetching document history:", error);
       throw error;
     }
-  }
+  },
 };
 
 export const authService = {
@@ -247,12 +247,8 @@ export const authService = {
     return api.get("/auth/admin/user-group-roles/");
   },
 
-  assignGroupRoles(username, groupName, roles) {
-    return api.post("/auth/admin/groups/assign-roles", {
-      username,
-      group_name: groupName,
-      roles,
-    });
+  assignGroupRoles(roleData) {
+    return api.post("/auth/admin/groups/assign-roles", roleData);
   },
 
   removeGroupRoles(username, groupName, roles) {
