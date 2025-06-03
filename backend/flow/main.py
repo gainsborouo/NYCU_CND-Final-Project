@@ -405,7 +405,7 @@ def update_document(
 
     # Determine what the user is allowed to update
     allowed_to_update_all = is_admin_in_realm
-    allowed_to_update_own_draft = is_creator and db_document.status == DocumentStatus.DRAFT
+    allowed_to_update_own_draft = is_creator and (db_document.status == DocumentStatus.DRAFT or db_document.status == DocumentStatus.PUBLISHED)
 
     # If not allowed to update anything, raise Forbidden
     if not allowed_to_update_all and not allowed_to_update_own_draft:
@@ -420,15 +420,15 @@ def update_document(
     for key, value in update_data.items():
         if not allowed_to_update_all:
             # If not an admin, restrict updates to title/description only if it's their draft
-            if key not in ["title", "description"]:
+            if key not in ["title", "description", "status"]:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"User not authorized to update '{key}' field for document with ID {document_id}."
                 )
-            if db_document.status != DocumentStatus.DRAFT:
+            if db_document.status != DocumentStatus.DRAFT and db_document.status != DocumentStatus.PUBLISHED:
                  raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Document with ID {document_id} cannot be updated unless it is in DRAFT status by its creator."
+                    detail=f"Document with ID {document_id} cannot be updated unless it is in DRAFT or PUBLISHED status by its creator."
                 )
         # Apply the update
         setattr(db_document, key, value)
