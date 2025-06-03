@@ -1,10 +1,11 @@
-name: Playwright Tests
+name: Test Frontend
 on:
   push:
     branches:
       - '**'
 jobs:
   test:
+    name: playright
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
