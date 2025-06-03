@@ -95,6 +95,7 @@ services:
       - minio
       - flow
       - auth
+      - frontend
     networks:
       - app_network
 networks:
