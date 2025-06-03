@@ -21,9 +21,7 @@ services:
       - app_network
 
   minio-api:
-    build:
-      context: ./minio
-      dockerfile: Dockerfile
+    image: ghcr.io/gainsborouo/nycu_cnd-final-project:minio_api
     container_name: minio-api
     ports:
       - "8000:8000"
@@ -37,7 +35,7 @@ services:
     networks:
       - app_network
   flow:
-    build: ./backend/flow
+    image: ghcr.io/gainsborouo/nycu_cnd-final-project:backend_flow
     container_name: flow
     depends_on:
       flow_db:
@@ -49,7 +47,7 @@ services:
     networks:
       - app_network
   auth:
-    build: ./backend/auth
+    image: ghcr.io/gainsborouo/nycu_cnd-final-project:backend_auth
     container_name: auth
     depends_on:
       flow_db:
@@ -79,14 +77,12 @@ services:
     volumes:
       - flow_db_data:/var/lib/postgresql/data
   frontend:
-    build: ./frontend
+    image: ghcr.io/gainsborouo/nycu_cnd-final-project:frontend
     container_name: frontend
     ports:
       - "5173:80"
     networks:
       - app_network
-    env_file:
-      - ./frontend/.env
   nginx:
     image: nginx:latest
     container_name: nginx
