@@ -522,9 +522,13 @@ export default {
             return `${days} day${days > 1 ? "s" : ""} ago`;
           }
 
+          const adjustedDate = new Date(
+            date.getTime() - date.getTimezoneOffset() * 60000
+          );
+
           return (
             "on " +
-            date.toLocaleDateString("en-US", {
+            adjustedDate.toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",

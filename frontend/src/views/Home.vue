@@ -56,7 +56,7 @@
                 'px-3 py-1.5 rounded-2xl text-sm transition-colors duration-200',
                 selectedStatuses.includes(status.value)
                   ? status.activeClass
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700',
               ]"
             >
               {{ status.label }}
@@ -134,7 +134,7 @@
             >
               <div class="flex justify-between w-full">
                 <!-- Admin button on left -->
-                <div >
+                <div>
                   <button
                     v-if="isAdmin(doc.realmId)"
                     @click="adminAction(doc.id)"
@@ -353,24 +353,36 @@ export default {
     });
     const groupNames = ref({});
     const usernames = ref({});
-    const searchQuery = ref('');
+    const searchQuery = ref("");
     const selectedStatuses = ref([]);
 
     const statusFilters = [
-      { label: 'All', value: '', activeClass: 'bg-cyan-700 text-white' },
-      { label: 'Draft', value: 'draft', activeClass: 'bg-gray-600 text-white' },
-      { label: 'Pending Review', value: 'pending_review', activeClass: 'bg-yellow-600 text-white' },
-      { label: 'Published', value: 'published', activeClass: 'bg-green-600 text-white' },
-      { label: 'Rejected', value: 'rejected', activeClass: 'bg-red-600 text-white' },
+      { label: "All", value: "", activeClass: "bg-cyan-700 text-white" },
+      { label: "Draft", value: "draft", activeClass: "bg-gray-600 text-white" },
+      {
+        label: "Pending Review",
+        value: "pending_review",
+        activeClass: "bg-yellow-600 text-white",
+      },
+      {
+        label: "Published",
+        value: "published",
+        activeClass: "bg-green-600 text-white",
+      },
+      {
+        label: "Rejected",
+        value: "rejected",
+        activeClass: "bg-red-600 text-white",
+      },
     ];
 
     const toggleStatusFilter = (status) => {
-      if (status === '') {
+      if (status === "") {
         // If "All" is clicked, clear other filters
         selectedStatuses.value = [];
         return;
       }
-      
+
       const index = selectedStatuses.value.indexOf(status);
       if (index === -1) {
         selectedStatuses.value.push(status);
@@ -381,16 +393,16 @@ export default {
 
     const filteredDocuments = computed(() => {
       return documents.value
-        .filter(doc => {
+        .filter((doc) => {
           // Apply search filter
           const searchLower = searchQuery.value.toLowerCase();
-          const matchesSearch = 
+          const matchesSearch =
             doc.title.toLowerCase().includes(searchLower) ||
             doc.description.toLowerCase().includes(searchLower);
 
           // Apply status filter
-          const matchesStatus = 
-            selectedStatuses.value.length === 0 || 
+          const matchesStatus =
+            selectedStatuses.value.length === 0 ||
             selectedStatuses.value.includes(doc.status);
 
           return matchesSearch && matchesStatus;
@@ -554,9 +566,13 @@ export default {
         return `${days} day${days > 1 ? "s" : ""} ago`;
       }
 
+      const adjustedDate = new Date(
+        date.getTime() - date.getTimezoneOffset() * 60000
+      );
+
       return (
         "on " +
-        date.toLocaleDateString("en-US", {
+        adjustedDate.toLocaleDateString("en-US", {
           year: "numeric",
           month: "long",
           day: "numeric",
@@ -571,9 +587,9 @@ export default {
 
         const payload = JSON.parse(atob(token.split(".")[1]));
         const realmRoles = payload.realm_roles || {};
-        
+
         // Check if user has admin role in this realm
-        return realmRoles[realmId]?.includes('admin') || false;
+        return realmRoles[realmId]?.includes("admin") || false;
       } catch (error) {
         console.error("Error checking admin status:", error);
         return false;
@@ -585,11 +601,11 @@ export default {
         console.error("No document ID provided for admin action");
         return;
       }
-      
+
       console.log("Opening admin panel for document:", docId);
       router.push(`/admin/${docId}`);
     };
-    
+
     // Update onMounted to fetch group names
     onMounted(async () => {
       if (isLoggedIn.value) {
