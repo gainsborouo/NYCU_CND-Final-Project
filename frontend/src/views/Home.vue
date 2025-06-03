@@ -268,6 +268,13 @@
                     >
                       View
                     </button>
+                    <button
+                      v-if="doc.creatorId === getCurrentUserId()"
+                      @click="createNewVersion(doc.id)"
+                      class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
+                    >
+                      New Version
+                    </button>
                   </template>
 
                   <!-- Rejected actions -->
@@ -820,11 +827,10 @@ export default {
         return;
       }
       try {
-        const response = await documentService.createDocument({
-          originalId: docId,
-          type: "new_version",
+        const response = await documentService.updateDocumentFields(docId, {
+          status: "draft",
         });
-        router.push(`/editor/${response.data.id}`);
+        router.push(`/editor/${docId}`);
       } catch (error) {
         console.error("Error creating new version:", error);
       }
