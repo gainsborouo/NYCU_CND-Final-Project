@@ -1,0 +1,228 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+spec:
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:RELEASE.2025-05-24T17-08-30Z
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports:
+            - containerPort: 9000
+            - containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              value: "admin"
+            - name: MINIO_ROOT_PASSWORD
+              value: "admin1234"
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: minio-data
+          persistentVolumeClaim:
+            claimName: minio-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-api
+spec:
+  selector:
+    matchLabels:
+      app: minio-api
+  template:
+    metadata:
+      labels:
+        app: minio-api
+    spec:
+      containers:
+        - name: minio-api
+          image: ghcr.io/gainsborouo/nycu_cnd-final-project:minio_api
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MINIO_ENDPOINT
+              value: "minio:9000"
+            - name: MINIO_ACCESS_KEY
+              value: "admin"
+            - name: MINIO_SECRET_KEY
+              value: "admin1234"
+            - name: MINIO_SECURE
+              value: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow
+spec:
+  selector:
+    matchLabels:
+      app: flow
+  template:
+    metadata:
+      labels:
+        app: flow
+    spec:
+      containers:
+        - name: flow
+          image: ghcr.io/gainsborouo/nycu_cnd-final-project:backend_flow
+          ports:
+            - containerPort: 8000
+          env:
+            # Add all env vars from your .env file here
+            - name: DATABASE_URL
+              value: "postgresql://admin:password@flow-db:5432/database"
+          # Add other environment variables as needed
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+spec:
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+    spec:
+      containers:
+        - name: auth
+          image: ghcr.io/gainsborouo/nycu_cnd-final-project:backend_auth
+          ports:
+            - containerPort: 8000
+          env:
+            # Add all env vars from your .env file here
+            - name: DATABASE_URL
+              value: "postgresql://admin:password@flow-db:5432/database"
+          # Add other environment variables as needed
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow-db
+spec:
+  selector:
+    matchLabels:
+      app: flow-db
+  template:
+    metadata:
+      labels:
+        app: flow-db
+    spec:
+      containers:
+        - name: flow-db
+          image: postgres:latest
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "admin"
+            - name: PGUSER
+              value: "admin"
+            - name: POSTGRES_PASSWORD
+              value: "password"
+            - name: POSTGRES_DB
+              value: "database"
+          volumeMounts:
+            - name: flow-db-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: flow-db-data
+          persistentVolumeClaim:
+            claimName: flow-db-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/gainsborouo/nycu_cnd-final-project:frontend
+          ports:
+            - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: flow-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-gateway
+spec:
+  selector:
+    matchLabels:
+      app: nginx-gateway
+  template:
+    metadata:
+      labels:
+        app: nginx-gateway
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
