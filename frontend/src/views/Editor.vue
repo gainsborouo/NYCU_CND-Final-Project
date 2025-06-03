@@ -448,7 +448,7 @@ export default {
 
         return `${
           import.meta.env.VITE_API_BASE_URL
-        }minio-api/files/${uid}/${filename}`;
+        }/minio-api/files/${uid}/${filename}`;
       } catch (error) {
         console.error("Error uploading image:", error);
         throw error;

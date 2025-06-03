@@ -86,11 +86,19 @@
           </button>
         </div>
 
-        <!-- Document grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <!-- Documents Grid with Enhanced Animation -->
+        <transition-group
+          name="staggered-fade"
+          tag="div"
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4"
+          @before-enter="beforeEnter"
+          @enter="enter"
+          @leave="leave"
+        >
           <div
-            v-for="doc in filteredDocuments"
+            v-for="(doc, index) in filteredDocuments"
             :key="doc.id"
+            :data-index="index"
             class="flex flex-col bg-gray-800 rounded-lg overflow-hidden border border-gray-700"
           >
             <div class="p-6 flex-grow">
@@ -122,85 +130,104 @@
             </div>
 
             <div
-              class="p-4 border-t border-gray-700 bg-gray-800/50 min-h-[4rem] flex items-center"
+              class="p-3 border-t border-gray-700 bg-gray-800/50 flex items-center"
             >
-              <div class="flex justify-end gap-3 w-full">
-                <!-- Draft actions -->
-                <template v-if="doc.status === 'draft'">
+              <div class="flex justify-between w-full">
+                <!-- Admin button on left -->
+                <div >
                   <button
-                    @click="editDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                    v-if="isAdmin(doc.realmId)"
+                    @click="adminAction(doc.id)"
+                    class="text-xs px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors duration-200"
                   >
-                    Edit
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
                   </button>
-                  <button
-                    @click="submitForReview(doc.id)"
-                    class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
-                  >
-                    Submit for Review
-                  </button>
-                </template>
+                </div>
 
-                <template v-if="doc.status === 'rejected'">
-                  <button
-                    @click="editDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    @click="submitForReview(doc.id)"
-                    class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
-                  >
-                    Submit for Review
-                  </button>
-                  <button
-                    @click="viewDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
-                  >
-                    View
-                  </button>
-                </template>
+                <!-- Other action buttons on right -->
+                <div class="flex gap-3">
+                  <!-- Draft actions -->
+                  <template v-if="doc.status === 'draft'">
+                    <button
+                      @click="editDocument(doc.id)"
+                      class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      @click="submitForReview(doc.id)"
+                      class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
+                    >
+                      Submit for Review
+                    </button>
+                  </template>
 
-                <!-- Pending Review actions -->
-                <template v-if="doc.status === 'pending_review'">
-                  <button
-                    @click="viewDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
-                  >
-                    View
-                  </button>
-                  <button
-                    v-if="doc.currentReviewerId === getCurrentUserId()"
-                    @click="reviewDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
-                  >
-                    Review
-                  </button>
-                  <!-- <span v-else-if="doc.creatorId === getCurrentUserId()" class="text-xs text-gray-400">
-                    Waiting for review...
-                  </span> -->
-                </template>
+                  <!-- Pending Review actions -->
+                  <template v-if="doc.status === 'pending_review'">
+                    <button
+                      @click="viewDocument(doc.id)"
+                      class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                    >
+                      View
+                    </button>
+                    <button
+                      v-if="doc.currentReviewerId === getCurrentUserId()"
+                      @click="reviewDocument(doc.id)"
+                      class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
+                    >
+                      Review
+                    </button>
+                  </template>
 
-                <!-- Published actions -->
-                <template v-if="doc.status === 'published'">
-                  <button
-                    @click="viewDocument(doc.id)"
-                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
-                  >
-                    View
-                  </button>
-                  <!-- <button
-                    @click="createNewVersion(doc.id)"
-                    class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
-                  >
-                    New Version
-                  </button> -->
-                </template>
+                  <!-- Published actions -->
+                  <template v-if="doc.status === 'published'">
+                    <button
+                      @click="viewDocument(doc.id)"
+                      class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                    >
+                      View
+                    </button>
+                  </template>
+
+                  <!-- Rejected actions -->
+                  <template v-if="doc.status === 'rejected'">
+                    <button
+                      @click="editDocument(doc.id)"
+                      class="text-xs px-3 py-1.5 border border-cyan-700 text-cyan-700 rounded hover:bg-cyan-700 hover:text-white transition-colors duration-200"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      @click="submitForReview(doc.id)"
+                      class="text-xs px-3 py-1.5 bg-cyan-700 text-white rounded hover:bg-cyan-600 transition-colors duration-200"
+                    >
+                      Submit for Review
+                    </button>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </transition-group>
 
         <!-- Create Document Modal -->
         <Transition
@@ -537,6 +564,32 @@ export default {
       );
     };
 
+    const isAdmin = (realmId) => {
+      try {
+        const token = authStore.token;
+        if (!token) return false;
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const realmRoles = payload.realm_roles || {};
+        
+        // Check if user has admin role in this realm
+        return realmRoles[realmId]?.includes('admin') || false;
+      } catch (error) {
+        console.error("Error checking admin status:", error);
+        return false;
+      }
+    };
+
+    const adminAction = (docId) => {
+      if (!docId) {
+        console.error("No document ID provided for admin action");
+        return;
+      }
+      
+      console.log("Opening admin panel for document:", docId);
+      router.push(`/admin/${docId}`);
+    };
+    
     // Update onMounted to fetch group names
     onMounted(async () => {
       if (isLoggedIn.value) {
@@ -608,7 +661,39 @@ export default {
       filteredDocuments,
       toggleStatusFilter,
       selectedStatuses,
+      isAdmin,
+      adminAction,
     };
   },
 };
 </script>
+
+<style>
+/* Add your custom styles here */
+
+/* Staggered fade transition */
+.staggered-fade-enter-active,
+.staggered-fade-leave-active {
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+.staggered-fade-enter,
+.staggered-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* Add smooth slide animations when items change position */
+.staggered-fade-move {
+  transition: transform 0.5s ease;
+  position: relative;
+  z-index: 1;
+}
+
+/* Make sure items maintain their space in the grid during transitions */
+.staggered-fade-leave-active {
+  position: absolute;
+  opacity: 0;
+  z-index: 0;
+}
+</style>

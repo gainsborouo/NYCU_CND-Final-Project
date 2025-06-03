@@ -5,6 +5,7 @@ import Editor from "../views/Editor.vue";
 import Viewer from "../views/Viewer.vue";
 import Notifications from "../views/Notifications.vue";
 import Review from "../views/Review.vue";
+import Admin from "../views/Admin.vue";
 
 const routes = [
   {
@@ -44,6 +45,14 @@ const routes = [
     meta: { requiresAuth: true },
     props: true,
   },
+  {
+    path: "/admin/:id",
+    name: "Admin",
+    component: Admin,
+    meta: { requiresAuth: true },
+    props: true,
+  },
+
 ];
 
 const router = createRouter({

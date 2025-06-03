@@ -6,7 +6,7 @@
           Login
         </h2>
 
-        <div class="space-y-6">
+        <form @submit.prevent="localLogin" class="space-y-6">
           <div>
             <label for="username" class="block mb-2 text-gray-200 font-medium">
               Username
@@ -38,7 +38,7 @@
           </div>
 
           <button
-            @click="localLogin"
+            type="submit"
             :disabled="!username || !password"
             class="w-full bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg
                    transition-colors duration-200 hover:bg-cyan-600
@@ -57,6 +57,7 @@
             <button
               v-if="!isTokenReceived"
               @click="GoogleOAuthLogin"
+              type="button"
               class="w-full border border-cyan-700 text-cyan-700 font-bold py-2 px-4 rounded-lg 
                      transition-colors duration-200 hover:bg-cyan-700 hover:text-white
                      flex items-center justify-center"
@@ -73,7 +74,7 @@
               Login successful. Redirecting...
             </p>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   </div>
