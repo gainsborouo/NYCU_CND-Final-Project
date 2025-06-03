@@ -21,6 +21,68 @@
     <!-- Logged In View -->
     <div v-else class="w-full p-6 overflow-auto">
       <div class="max-w-6xl mx-auto">
+        <div
+          v-if="isLoggedIn"
+          class="max-w-6xl mx-auto mb-4 flex justify-end gap-3"
+        >
+          <button
+            v-if="isGlobalAdmin"
+            @click="showAddUserModal = true"
+            class="px-3 py-1.5 bg-cyan-800 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-300 flex items-center gap-2 text-sm"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6z"
+              />
+              <path
+                d="M16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z"
+              />
+            </svg>
+            Add User
+          </button>
+          <button
+            v-if="isGlobalAdmin"
+            @click="showAddGroupModal = true"
+            class="px-3 py-1.5 bg-cyan-800 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-300 flex items-center gap-2 text-sm"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"
+              />
+            </svg>
+            Add Group
+          </button>
+          <button
+            v-if="hasAnyGroupAdminRole"
+            @click="showAssignRoleModal = true"
+            class="px-3 py-1.5 bg-cyan-800 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-300 flex items-center gap-2 text-sm"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Assign Role
+          </button>
+        </div>
+
         <!-- Add search and filter section -->
         <div class="mb-8 space-y-4 pt-2">
           <!-- Search bar -->
@@ -307,6 +369,235 @@
           </div>
         </Transition>
 
+        <!-- Add User Modal -->
+        <Transition
+          enter-active-class="transition duration-300 ease-out"
+          enter-from-class="transform opacity-0"
+          enter-to-class="transform opacity-100"
+          leave-active-class="transition duration-200 ease-in"
+          leave-from-class="transform opacity-100"
+          leave-to-class="transform opacity-0"
+        >
+          <div
+            v-if="showAddUserModal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              class="fixed inset-0 bg-gray-950/90 backdrop-blur-sm"
+              @click="showAddUserModal = false"
+            ></div>
+            <div
+              class="bg-gray-800 rounded-lg p-6 w-full max-w-md relative z-10"
+            >
+              <h3 class="text-xl font-semibold mb-4">Add New User</h3>
+              <form @submit.prevent="createUser">
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2">Username</label>
+                  <input
+                    v-model="newUser.username"
+                    type="text"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  />
+                </div>
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2">Password</label>
+                  <input
+                    v-model="newUser.password"
+                    type="password"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  />
+                </div>
+                <div class="mb-6">
+                  <label class="block text-sm font-medium mb-2">Role</label>
+                  <select
+                    v-model="newUser.global_role"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div class="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    @click="showAddUserModal = false"
+                    class="px-4 py-2 text-gray-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+                  >
+                    Create User
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- Assign Role Modal -->
+        <Transition
+          enter-active-class="transition duration-300 ease-out"
+          enter-from-class="transform opacity-0"
+          enter-to-class="transform opacity-100"
+          leave-active-class="transition duration-200 ease-in"
+          leave-from-class="transform opacity-100"
+          leave-to-class="transform opacity-0"
+        >
+          <div
+            v-if="showAssignRoleModal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              class="fixed inset-0 bg-gray-950/90 backdrop-blur-sm"
+              @click="showAssignRoleModal = false"
+            ></div>
+            <div
+              class="bg-gray-800 rounded-lg p-6 w-full max-w-md relative z-10"
+            >
+              <h3 class="text-xl font-semibold mb-4">Assign User Role</h3>
+              <form @submit.prevent="assignUserRole">
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2">Group</label>
+                  <select
+                    v-model="roleAssignment.group_name"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                    @change="selectedGroupChanged"
+                  >
+                    <option value="" disabled>Select a group</option>
+                    <option
+                      v-for="group in adminGroups"
+                      :key="group.id"
+                      :value="group.name"
+                    >
+                      {{ group.name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2">User</label>
+                  <select
+                    v-model="roleAssignment.username"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  >
+                    <option value="" disabled>Select a user</option>
+                    <option
+                      v-for="user in allUsers"
+                      :key="user.id"
+                      :value="user.username"
+                    >
+                      {{ user.username }}
+                    </option>
+                  </select>
+                </div>
+                <div class="mb-6">
+                  <label class="block text-sm font-medium mb-2">Role</label>
+                  <div class="space-y-2">
+                    <div class="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="role-reviewer"
+                        value="reviewer"
+                        v-model="roleAssignment.roles"
+                        class="mr-2 bg-gray-700 rounded text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <label for="role-reviewer" class="text-sm"
+                        >Reviewer</label
+                      >
+                    </div>
+                    <div class="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="role-admin"
+                        value="admin"
+                        v-model="roleAssignment.roles"
+                        class="mr-2 bg-gray-700 rounded text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <label for="role-admin" class="text-sm">Admin</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    @click="showAssignRoleModal = false"
+                    class="px-4 py-2 text-gray-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+                  >
+                    Assign Role
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- Add Group Modal -->
+        <Transition
+          enter-active-class="transition duration-300 ease-out"
+          enter-from-class="transform opacity-0"
+          enter-to-class="transform opacity-100"
+          leave-active-class="transition duration-200 ease-in"
+          leave-from-class="transform opacity-100"
+          leave-to-class="transform opacity-0"
+        >
+          <div
+            v-if="showAddGroupModal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              class="fixed inset-0 bg-gray-950/90 backdrop-blur-sm"
+              @click="showAddGroupModal = false"
+            ></div>
+            <div
+              class="bg-gray-800 rounded-lg p-6 w-full max-w-md relative z-10"
+            >
+              <h3 class="text-xl font-semibold mb-4">Create New Group</h3>
+              <form @submit.prevent="createGroup">
+                <div class="mb-4">
+                  <label class="block text-sm font-medium mb-2"
+                    >Group Name</label
+                  >
+                  <input
+                    v-model="newGroup.group_name"
+                    type="text"
+                    class="w-full px-3 py-2 bg-gray-700 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    required
+                  />
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    @click="showAddGroupModal = false"
+                    class="px-4 py-2 text-gray-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600"
+                  >
+                    Create Group
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- Submit For Review Modal -->
         <SubmitForReviewModal
           :show="showSubmitModal"
           :document-id="selectedDocumentId"
@@ -343,6 +634,9 @@ export default {
     const isReviewer = ref(true);
     const showCreateModal = ref(false);
     const showSubmitModal = ref(false);
+    const showAddUserModal = ref(false);
+    const showAssignRoleModal = ref(false);
+    const showAddGroupModal = ref(false);
     const selectedDocumentId = ref(null);
     const selectedGroupId = ref(null);
     const userGroups = ref([]);
@@ -351,10 +645,25 @@ export default {
       description: "",
       realmId: "",
     });
+    const newUser = ref({
+      username: "",
+      password: "",
+      global_role: "user",
+    });
+    const newGroup = ref({
+      group_name: "",
+    });
+    const roleAssignment = ref({
+      group_name: "",
+      username: "",
+      roles: [],
+    });
     const groupNames = ref({});
     const usernames = ref({});
     const searchQuery = ref("");
     const selectedStatuses = ref([]);
+    const allUsers = ref([]);
+    const adminGroups = ref([]);
 
     const statusFilters = [
       { label: "All", value: "", activeClass: "bg-cyan-700 text-white" },
@@ -535,9 +844,132 @@ export default {
       }
     };
 
+    const fetchAllUsers = async () => {
+      try {
+        const response = await authService.getAllUsers();
+        allUsers.value = response.data;
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
+
+    const getAdminGroups = () => {
+      try {
+        const token = authStore.token;
+        if (!token) return [];
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const realmRoles = payload.realm_roles || {};
+
+        return Object.entries(realmRoles)
+          .filter(([id, roles]) => roles.includes("admin"))
+          .map(([id, roles]) => ({
+            id,
+            name: groupNames.value[id] || `Group ${id}`,
+            roles,
+          }));
+      } catch (error) {
+        console.error("Error parsing admin groups:", error);
+        return [];
+      }
+    };
+
+    const selectedGroupChanged = () => {
+      // Reset roles when group changes
+      roleAssignment.value.roles = [];
+    };
+
+    const createUser = async () => {
+      try {
+        await authService.createUser(newUser.value);
+        showAddUserModal.value = false;
+        newUser.value = {
+          username: "",
+          password: "",
+          global_role: "user",
+        };
+        await fetchAllUsers();
+      } catch (error) {
+        console.error("Error creating user:", error);
+        notificationService.error(
+          "Failed to create user: " +
+            (error.response?.data?.detail || "Unknown error")
+        );
+      }
+    };
+
+    const assignUserRole = async () => {
+      try {
+        await authService.assignGroupRoles(roleAssignment.value);
+        showAssignRoleModal.value = false;
+        roleAssignment.value = {
+          username: "",
+          group_name: "",
+          roles: [],
+        };
+      } catch (error) {
+        console.error("Error assigning role:", error);
+        notificationService.error(
+          "Failed to assign role: " +
+            (error.response?.data?.detail || "Unknown error")
+        );
+      }
+    };
+
+    const createGroup = async () => {
+      try {
+        // Call the API with just the group name string
+        await authService.createGroup(newGroup.value.group_name);
+        showAddGroupModal.value = false;
+        newGroup.value = {
+          group_name: "",
+        };
+        // Refresh groups data
+        await fetchGroupNames();
+        userGroups.value = getUserGroups();
+        adminGroups.value = getAdminGroups();
+      } catch (error) {
+        console.error("Error creating group:", error);
+        notificationService.error(
+          "Failed to create group: " +
+            (error.response?.data?.detail || "Unknown error")
+        );
+      }
+    };
+
+    const isGlobalAdmin = computed(() => {
+      try {
+        const token = authStore.token;
+        if (!token) return false;
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        return payload.global_role === "admin";
+      } catch (error) {
+        console.error("Error checking global admin status:", error);
+        return false;
+      }
+    });
+
+    // Add this computed property before the return statement
+    const hasAnyGroupAdminRole = computed(() => {
+      try {
+        const token = authStore.token;
+        if (!token) return false;
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const realmRoles = payload.realm_roles || {};
+
+        return Object.values(realmRoles).some((roles) =>
+          roles.includes("admin")
+        );
+      } catch (error) {
+        console.error("Error checking group admin roles:", error);
+        return false;
+      }
+    });
+
     const handleReviewSubmitted = async () => {
       await fetchDocuments();
-      // Optional: Show success message
     };
 
     const formatDate = (dateString) => {
@@ -609,8 +1041,13 @@ export default {
     // Update onMounted to fetch group names
     onMounted(async () => {
       if (isLoggedIn.value) {
-        await Promise.all([fetchGroupNames(), fetchDocuments()]);
+        await Promise.all([
+          fetchGroupNames(),
+          fetchDocuments(),
+          fetchAllUsers(),
+        ]);
         userGroups.value = getUserGroups();
+        adminGroups.value = getAdminGroups();
         for (const doc of documents.value) {
           await fetchUsername(doc.creatorId);
         }
@@ -648,6 +1085,25 @@ export default {
       }
     };
 
+    const beforeEnter = (el) => {
+      el.style.opacity = 0;
+      el.style.transform = "translateY(10px)";
+    };
+
+    const enter = (el, done) => {
+      setTimeout(() => {
+        el.style.opacity = 1;
+        el.style.transform = "translateY(0)";
+        el.addEventListener("transitionend", done);
+      }, el.dataset.index * 50);
+    };
+
+    const leave = (el, done) => {
+      el.style.opacity = 0;
+      el.style.transform = "translateY(10px)";
+      el.addEventListener("transitionend", done);
+    };
+
     return {
       isLoggedIn,
       isReviewer,
@@ -679,6 +1135,24 @@ export default {
       selectedStatuses,
       isAdmin,
       adminAction,
+      showAddUserModal,
+      createUser,
+      roleAssignment,
+      assignUserRole,
+      showAssignRoleModal,
+      allUsers,
+      adminGroups,
+      newUser,
+      newGroup,
+      beforeEnter,
+      enter,
+      leave,
+      showAddGroupModal,
+      newGroup,
+      createGroup,
+      isGlobalAdmin,
+      hasAnyGroupAdminRole,
+      selectedGroupChanged,
     };
   },
 };

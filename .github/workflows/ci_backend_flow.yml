@@ -1,4 +1,4 @@
-name: Test flow backend
+name: Test Backend (flow)
 
 on:
   push:
