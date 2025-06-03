@@ -355,11 +355,11 @@ export default {
     
     const getActionDescription = (action) => {
       const actionDescriptions = {
-        'approve': 'approved the document',
-        'reject': 'rejected the document',
-        'submit': 'submitted the document for review',
-        'create': 'created the document',
-        'update': 'updated the document'
+        'approve': ' approved the document',
+        'reject': ' rejected the document',
+        'submit': ' submitted the document for review',
+        'create': ' created the document',
+        'update': ' updated the document'
       };
       return actionDescriptions[action?.toLowerCase()] || action;
     };
