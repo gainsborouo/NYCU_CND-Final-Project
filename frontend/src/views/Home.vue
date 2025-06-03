@@ -503,6 +503,16 @@
                     <div class="flex items-center">
                       <input
                         type="checkbox"
+                        id="role-user"
+                        value="user"
+                        v-model="roleAssignment.roles"
+                        class="mr-2 bg-gray-700 rounded text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <label for="role-admin" class="text-sm">User</label>
+                    </div>
+                    <div class="flex items-center">
+                      <input
+                        type="checkbox"
                         id="role-reviewer"
                         value="reviewer"
                         v-model="roleAssignment.roles"
