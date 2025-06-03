@@ -42,3 +42,36 @@ jobs:
             ghcr.io/gainsborouo/nycu_cnd-final-project:frontend-${{ github.sha }}
           build-args: |
             VITE_API_BASE_URL=${{ secrets.FRONTEND_API_BASE_URL }}
+
+      - name: Build and push Backend Flow Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/flow
+          file: ./backend/flow/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/gainsborouo/nycu_cnd-final-project:backend_flow
+            ghcr.io/gainsborouo/nycu_cnd-final-project:backend_flow-${{ github.sha }}
+
+      - name: Build and push Backend Auth Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/auth
+          file: ./backend/auth/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/gainsborouo/nycu_cnd-final-project:backend_auth
+            ghcr.io/gainsborouo/nycu_cnd-final-project:backend_auth-${{ github.sha }}
+
+      - name: Build and push MinIO API Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./minio
+          file: ./minio/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/gainsborouo/nycu_cnd-final-project:minio_api
+            ghcr.io/gainsborouo/nycu_cnd-final-project:minio_api-${{ github.sha }}
