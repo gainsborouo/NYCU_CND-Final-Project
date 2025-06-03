@@ -7,7 +7,7 @@
           @click="hideRead = !hideRead"
           class="px-3 py-1.5 text-sm border border-gray-600 text-gray-400 rounded hover:bg-gray-700 transition-colors duration-200"
         >
-          {{ !hideRead ? "Show all notifications" : "Show unread only" }}
+          {{ hideRead ? "Show all notifications" : "Show unread only" }}
         </button>
       </div>
 
@@ -147,7 +147,11 @@ export default {
         return `${days} day${days > 1 ? "s" : ""} ago`;
       }
 
-      return date.toLocaleDateString("en-US", {
+      const adjustedDate = new Date(
+        date.getTime() - date.getTimezoneOffset() * 60000
+      );
+
+      return adjustedDate.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -183,8 +187,8 @@ export default {
         : notifications.value;
 
       return filtered.sort((a, b) => {
-        const dateA = new Date(a.created_at);  // Use original timestamp
-        const dateB = new Date(b.created_at);  // Use original timestamp
+        const dateA = new Date(a.created_at); // Use original timestamp
+        const dateB = new Date(b.created_at); // Use original timestamp
         return dateB - dateA;
       });
     });
