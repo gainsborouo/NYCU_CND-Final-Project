@@ -21,7 +21,9 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@tailwindcss/typography": "^0.5.16",
+    "@types/node": "^22.15.29",
     "@vitejs/plugin-vue": "^5.2.3",
     "vite": "^6.3.5"
   }
