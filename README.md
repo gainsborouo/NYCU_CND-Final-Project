@@ -1,4 +1,4 @@
-# NYCU_CN-Final-Project
+# Document Center
 ![home](https://github.com/user-attachments/assets/8929d82b-2acc-43ff-8e0f-2fc2002be462)
 
 ## Setup locally
