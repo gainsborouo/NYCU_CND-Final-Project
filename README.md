@@ -1,4 +1,5 @@
 # NYCU_CN-Final-Project
+![home](https://github.com/user-attachments/assets/8929d82b-2acc-43ff-8e0f-2fc2002be462)
 
 ## Setup locally
 1. Revise `.env` file
